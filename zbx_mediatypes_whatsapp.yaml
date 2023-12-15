@@ -5,7 +5,7 @@ zabbix_export:
       type: WEBHOOK
       parameters:
         - name: Authorization
-          value: 'Bearer B6D711FCDE4D4FD5936544120E713976'
+          value: 'Bearer <token_api>'
         - name: Instance
           value: zabbixbot
         - name: Message
