@@ -134,7 +134,7 @@ zabbix_export:
           operation_mode: PROBLEM
           subject: "Problem: {EVENT.NAME}"
           message: |
-            Problem started at {EVENT.TIME} on {EVENT.DATE}
+            Problem started: {EVENT.TIME} on {EVENT.DATE}
             Problem name: {EVENT.NAME}
             Host: {HOST.NAME}
             Severity: {EVENT.SEVERITY}
@@ -145,7 +145,7 @@ zabbix_export:
           operation_mode: RECOVERY
           subject: "Resolved in {EVENT.DURATION}: {EVENT.NAME}"
           message: |
-            Problem has been resolved in {EVENT.DURATION} at {EVENT.RECOVERY.TIME} on {EVENT.RECOVERY.DATE}
+            Problem resolved: {EVENT.DURATION} at {EVENT.RECOVERY.TIME} on {EVENT.RECOVERY.DATE}
             Problem name: {EVENT.NAME}
             Host: {HOST.NAME}
             Severity: {EVENT.SEVERITY}
