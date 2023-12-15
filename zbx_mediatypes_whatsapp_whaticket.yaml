@@ -124,28 +124,28 @@ zabbix_export:
       message_templates:
         - event_source: TRIGGERS
           operation_mode: PROBLEM
-          subject: "Problem: {EVENT.NAME}"
+          subject: "*Problem:* {EVENT.NAME}"
           message: |
-            Problem started: {EVENT.TIME} on {EVENT.DATE}
-            Problem name: {EVENT.NAME}
-            Host: {HOST.NAME}
-            Severity: {EVENT.SEVERITY}
-            Operational data: {EVENT.OPDATA}
-            Original problem ID: {EVENT.ID}
+            *Problem started:* {EVENT.TIME} on {EVENT.DATE}
+            *Problem name:* {EVENT.NAME}
+            *Host:* {HOST.NAME}
+            *Severity:* {EVENT.SEVERITY}
+            *Operational data:* {EVENT.OPDATA}
+            *Original problem ID:* {EVENT.ID}
             {TRIGGER.URL}
         - event_source: TRIGGERS
           operation_mode: RECOVERY
-          subject: "Resolved in {EVENT.DURATION}: {EVENT.NAME}"
+          subject: "*Resolved:* {EVENT.DURATION}: {EVENT.NAME}"
           message: |
-            Problem resolved: {EVENT.DURATION} at {EVENT.RECOVERY.TIME} on {EVENT.RECOVERY.DATE}
-            Problem name: {EVENT.NAME}
-            Host: {HOST.NAME}
-            Severity: {EVENT.SEVERITY}
-            Original problem ID: {EVENT.ID}
+            *Problem resolved:* {EVENT.DURATION} at {EVENT.RECOVERY.TIME} on {EVENT.RECOVERY.DATE}
+            *Problem name: {EVENT.NAME}
+            *Host:* {HOST.NAME}
+            *Severity:* {EVENT.SEVERITY}
+            *Original problem ID*: {EVENT.ID}
             {TRIGGER.URL}
         - event_source: TRIGGERS
           operation_mode: UPDATE
-          subject: "Updated problem: {EVENT.NAME}"
+          subject: "*Updated problem:* {EVENT.NAME}"
           message: |
             {USER.FULLNAME} {EVENT.UPDATE.ACTION} problem at {EVENT.UPDATE.DATE} {EVENT.UPDATE.TIME}.
             {EVENT.UPDATE.MESSAGE}
@@ -153,23 +153,23 @@ zabbix_export:
             Current problem status is {EVENT.STATUS}, acknowledged: {EVENT.ACK.STATUS}.
         - event_source: DISCOVERY
           operation_mode: PROBLEM
-          subject: "Discovery: {DISCOVERY.DEVICE.STATUS} {DISCOVERY.DEVICE.IPADDRESS}"
+          subject: "*Discovery:* {DISCOVERY.DEVICE.STATUS} {DISCOVERY.DEVICE.IPADDRESS}"
           message: |
-            Discovery rule: {DISCOVERY.RULE.NAME}
+            *Discovery rule:* {DISCOVERY.RULE.NAME}
 
-            Device IP: {DISCOVERY.DEVICE.IPADDRESS}
-            Device DNS: {DISCOVERY.DEVICE.DNS}
-            Device status: {DISCOVERY.DEVICE.STATUS}
-            Device uptime: {DISCOVERY.DEVICE.UPTIME}
+            *Device IP:* {DISCOVERY.DEVICE.IPADDRESS}
+            *Device DNS:* {DISCOVERY.DEVICE.DNS}
+            *Device status:* {DISCOVERY.DEVICE.STATUS}
+            *Device uptime:* {DISCOVERY.DEVICE.UPTIME}
 
-            Device service name: {DISCOVERY.SERVICE.NAME}
-            Device service port: {DISCOVERY.SERVICE.PORT}
-            Device service status: {DISCOVERY.SERVICE.STATUS}
-            Device service uptime: {DISCOVERY.SERVICE.UPTIME}
+            *Device service name:* {DISCOVERY.SERVICE.NAME}
+            *Device service port:* {DISCOVERY.SERVICE.PORT}
+            *Device service status:* {DISCOVERY.SERVICE.STATUS}
+            *Device service uptime:* {DISCOVERY.SERVICE.UPTIME}
         - event_source: AUTOREGISTRATION
           operation_mode: PROBLEM
           subject: "Autoregistration: {HOST.HOST}"
           message: |
-            Host name: {HOST.HOST}
-            Host IP: {HOST.IP}
-            Agent port: {HOST.PORT}
+            *Host name:* {HOST.HOST}
+            *Host IP:* {HOST.IP}
+            *Agent port:* {HOST.PORT}
