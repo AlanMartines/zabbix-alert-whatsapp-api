@@ -122,58 +122,54 @@ zabbix_export:
       timeout: 10s
       description: //TODO
       message_templates:
-          - event_source: TRIGGERS
-            operation_mode: PROBLEM
-            subject: "🔴 Problem: {EVENT.NAME}"
-            message: |
-              🕒 Problem started: {EVENT.TIME} on {EVENT.DATE}
-              🚩 Problem name: {EVENT.NAME}
-              💻 Host: {HOST.NAME}
-              🚨 Severity: {EVENT.SEVERITY}
-              🔍 Operational data: {EVENT.OPDATA}
-              🆔 Original problem ID: {EVENT.ID}
-              🔗 {TRIGGER.URL}
+        - event_source: TRIGGERS
+          operation_mode: PROBLEM
+          subject: "Problem: {EVENT.NAME}"
+          message: |
+            Problem started at {EVENT.TIME} on {EVENT.DATE}
+            Problem name: {EVENT.NAME}
+            Host: {HOST.NAME}
+            Severity: {EVENT.SEVERITY}
+            Operational data: {EVENT.OPDATA}
+            Original problem ID: {EVENT.ID}
+            {TRIGGER.URL}
+        - event_source: TRIGGERS
+          operation_mode: RECOVERY
+          subject: "Resolved in {EVENT.DURATION}: {EVENT.NAME}"
+          message: |
+            Problem has been resolved in {EVENT.DURATION} at {EVENT.RECOVERY.TIME} on {EVENT.RECOVERY.DATE}
+            Problem name: {EVENT.NAME}
+            Host: {HOST.NAME}
+            Severity: {EVENT.SEVERITY}
+            Original problem ID: {EVENT.ID}
+            {TRIGGER.URL}
+        - event_source: TRIGGERS
+          operation_mode: UPDATE
+          subject: "Updated problem: {EVENT.NAME}"
+          message: |
+            {USER.FULLNAME} {EVENT.UPDATE.ACTION} problem at {EVENT.UPDATE.DATE} {EVENT.UPDATE.TIME}.
+            {EVENT.UPDATE.MESSAGE}
 
-          - event_source: TRIGGERS
-            operation_mode: RECOVERY
-            subject: "✅ Resolved in {EVENT.DURATION}: {EVENT.NAME}"
-            message: |
-              ⏱️ Problem resolved: {EVENT.DURATION} at {EVENT.RECOVERY.TIME} on {EVENT.RECOVERY.DATE}
-              🚩 Problem name: {EVENT.NAME}
-              💻 Host: {HOST.NAME}
-              🚨 Severity: {EVENT.SEVERITY}
-              🆔 Original problem ID: {EVENT.ID}
-              🔗 {TRIGGER.URL}
+            Current problem status is {EVENT.STATUS}, acknowledged: {EVENT.ACK.STATUS}.
+        - event_source: DISCOVERY
+          operation_mode: PROBLEM
+          subject: "Discovery: {DISCOVERY.DEVICE.STATUS} {DISCOVERY.DEVICE.IPADDRESS}"
+          message: |
+            Discovery rule: {DISCOVERY.RULE.NAME}
 
-          - event_source: TRIGGERS
-            operation_mode: UPDATE
-            subject: "🔄 Updated problem: {EVENT.NAME}"
-            message: |
-              👤 {USER.FULLNAME} {EVENT.UPDATE.ACTION} problem at {EVENT.UPDATE.DATE} {EVENT.UPDATE.TIME}.
-              📝 {EVENT.UPDATE.MESSAGE}
+            Device IP: {DISCOVERY.DEVICE.IPADDRESS}
+            Device DNS: {DISCOVERY.DEVICE.DNS}
+            Device status: {DISCOVERY.DEVICE.STATUS}
+            Device uptime: {DISCOVERY.DEVICE.UPTIME}
 
-              Current problem status is {EVENT.STATUS}, acknowledged: {EVENT.ACK.STATUS}.
-
-          - event_source: DISCOVERY
-            operation_mode: PROBLEM
-            subject: "🔍 Discovery: {DISCOVERY.DEVICE.STATUS} {DISCOVERY.DEVICE.IPADDRESS}"
-            message: |
-              📡 Discovery rule: {DISCOVERY.RULE.NAME}
-
-              🌐 Device IP: {DISCOVERY.DEVICE.IPADDRESS}
-              🌐 Device DNS: {DISCOVERY.DEVICE.DNS}
-              📶 Device status: {DISCOVERY.DEVICE.STATUS}
-              ⏳ Device uptime: {DISCOVERY.DEVICE.UPTIME}
-
-              🛠️ Device service name: {DISCOVERY.SERVICE.NAME}
-              🚪 Device service port: {DISCOVERY.SERVICE.PORT}
-              📶 Device service status: {DISCOVERY.SERVICE.STATUS}
-              ⏳ Device service uptime: {DISCOVERY.SERVICE.UPTIME}
-
-          - event_source: AUTOREGISTRATION
-            operation_mode: PROBLEM
-            subject: "📥 Autoregistration: {HOST.HOST}"
-            message: |
-              💻 Host name: {HOST.HOST}
-              🌐 Host IP: {HOST.IP}
-              🚪 Agent port: {HOST.PORT}
+            Device service name: {DISCOVERY.SERVICE.NAME}
+            Device service port: {DISCOVERY.SERVICE.PORT}
+            Device service status: {DISCOVERY.SERVICE.STATUS}
+            Device service uptime: {DISCOVERY.SERVICE.UPTIME}
+        - event_source: AUTOREGISTRATION
+          operation_mode: PROBLEM
+          subject: "Autoregistration: {HOST.HOST}"
+          message: |
+            Host name: {HOST.HOST}
+            Host IP: {HOST.IP}
+            Agent port: {HOST.PORT}
