@@ -5,9 +5,7 @@ zabbix_export:
       type: WEBHOOK
       parameters:
         - name: Authorization
-          value: "Bearer <token_api>"
-        - name: Instance
-          value: zabbixbot
+          value: "<token_api>"
         - name: Message
           value: "{ALERT.MESSAGE}"
         - name: ParseMode
@@ -17,12 +15,11 @@ zabbix_export:
         - name: To
           value: "{ALERT.SENDTO}"
         - name: Url
-          value: "http://localhost/8080"
+          value: "http://localhost:8080"
       attempts: "1"
       script: |
         var WhatsApp = {
             baseurl: null,
-            instance: null,
             Authorization: null,
             to: null,
             message: null,
@@ -47,19 +44,14 @@ zabbix_export:
 
             sendMessage: function () {
                 var params = {
-                    number: WhatsApp.to,
-                    options: {
-                        delay: 1200,
-                        presence: "composing"
-                    },
-                    textMessage: {
-                        "text": WhatsApp.message
-                    }
+                    SessionName: WhatsApp.Authorization,
+                    phonefull: WhatsApp.to,
+                    msg: WhatsApp.message,
                 },
                 data,
                 response,
                 request = new HttpRequest(),
-                url = WhatsApp.baseurl + '/api/messages/send';
+                url = WhatsApp.baseurl + '/sistema/sendText';
 
                 if (WhatsApp.parse_mode !== null) {
                     params['parse_mode'] = WhatsApp.parse_mode;
@@ -96,9 +88,18 @@ zabbix_export:
                 throw 'Incorrect value is given for parameter "Url": parameter is missing';
             }
 
-            if (typeof params.Authorization === 'undefined') {
+            if (typeof params.SessionName === 'undefined') {
                 throw 'Incorrect value is given for parameter "Authorization": parameter is missing';
             }
+
+            if (typeof params.phonefull === 'undefined') {
+                throw 'Incorrect value is given for parameter "to": parameter is missing';
+            }
+
+            if (typeof params.msg === 'undefined') {
+                throw 'Incorrect value is given for parameter "message": parameter is missing';
+            }
+
 
             WhatsApp.baseurl = params.Url;
             WhatsApp.Authorization = params.Authorization;

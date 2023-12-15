@@ -15,12 +15,11 @@ zabbix_export:
         - name: To
           value: "{ALERT.SENDTO}"
         - name: Url
-          value: "http://localhost/8080"
+          value: "http://localhost:8080"
       attempts: "1"
       script: |
         var WhatsApp = {
             baseurl: null,
-            instance: null,
             Authorization: null,
             to: null,
             message: null,
