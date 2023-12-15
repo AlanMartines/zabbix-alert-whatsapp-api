@@ -62,7 +62,6 @@ zabbix_export:
                 }
 
                 request.addHeader('Content-Type: application/json');
-                request.addHeader('Authorization: ' + WhatsApp.Authorization);
                 data = JSON.stringify(params);
 
                 // Remove replace() function if you want to see the exposed token in the log file.
@@ -71,7 +70,7 @@ zabbix_export:
                 response = request.post(url, data);
                 Zabbix.log(4, '[WhatsApp Webhook] HTTP code: ' + request.getStatus());
 
-                if (request.getStatus() == 202 || request.getStatus() == 201 || request.getStatus() == 202) {
+                if (request.getStatus() == 200 || request.getStatus() == 201 || request.getStatus() == 202) {
                     // we did it. lets just exit for now.
                     Zabbix.log(4, '[WhatsApp Webhook] request sent successfully');
                     return;
@@ -88,18 +87,17 @@ zabbix_export:
                 throw 'Incorrect value is given for parameter "Url": parameter is missing';
             }
 
-            if (typeof params.SessionName === 'undefined') {
+            if (typeof params.Authorization === 'undefined') {
                 throw 'Incorrect value is given for parameter "Authorization": parameter is missing';
             }
 
-            if (typeof params.phonefull === 'undefined') {
+            if (typeof params.To === 'undefined') {
                 throw 'Incorrect value is given for parameter "to": parameter is missing';
             }
 
-            if (typeof params.msg === 'undefined') {
+            if (typeof params.Message === 'undefined') {
                 throw 'Incorrect value is given for parameter "message": parameter is missing';
             }
-
 
             WhatsApp.baseurl = params.Url;
             WhatsApp.Authorization = params.Authorization;
