@@ -1,7 +1,7 @@
 zabbix_export:
   version: "6.4"
   media_types:
-    - name: "WhatsApp Whaticket API"
+    - name: "WhatsApp ConnectZap API"
       type: WEBHOOK
       parameters:
         - name: Authorization
