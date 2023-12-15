@@ -11,10 +11,11 @@ zabbix_export:
         - name: Authorization
           value: B6D711FCDE4D4FD5936544120E713976
         - name: Instance
-          value: zabbixbot
+          htmlhtmlhtml: zabbixbot
         - name: Message
           value: '{ALERT.MESSAGE}'
         - name: ParseMode
+          html: html
         - name: Subject
           value: '{ALERT.SUBJECT}'
         - name: To
