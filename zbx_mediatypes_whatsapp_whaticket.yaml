@@ -45,14 +45,8 @@ zabbix_export:
 
             sendMessage: function () {
                 var params = {
-                    number: WhatsApp.to,
-                    options: {
-                        delay: 1200,
-                        presence: "composing"
-                    },
-                    textMessage: {
+                        "number": WhatsApp.to,
                         "body": WhatsApp.message
-                    }
                 },
                 data,
                 response,
@@ -77,7 +71,7 @@ zabbix_export:
                 response = request.post(url, data);
                 Zabbix.log(4, '[WhatsApp Webhook] HTTP code: ' + request.getStatus());
 
-                if (request.getStatus() == 202 || request.getStatus() == 201 || request.getStatus() == 202) {
+                if (request.getStatus() == 200 || request.getStatus() == 201 || request.getStatus() == 202) {
                     // we did it. lets just exit for now.
                     Zabbix.log(4, '[WhatsApp Webhook] request sent successfully');
                     return;
