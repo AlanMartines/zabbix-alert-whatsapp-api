@@ -6,8 +6,6 @@ zabbix_export:
       parameters:
         - name: Authorization
           value: "Bearer <token_api>"
-        - name: Instance
-          value: zabbixbot
         - name: Message
           value: "{ALERT.MESSAGE}"
         - name: ParseMode
