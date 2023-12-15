@@ -11,7 +11,6 @@ zabbix_export:
         - name: Message
           value: '{ALERT.MESSAGE}'
         - name: ParseMode
-          value: html
         - name: Subject
           value: '{ALERT.SUBJECT}'
         - name: To
