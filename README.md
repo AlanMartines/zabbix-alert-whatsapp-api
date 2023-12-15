@@ -5,7 +5,7 @@ Integração do zabbix com api do whaticket para envio de notificações.
 zabbix_export:
   version: '6.4'
   media_types:
-    - name: 'WhatsApp (Evolution API)'
+    - name: 'WhatsApp Whaticket API'
       type: WEBHOOK
       parameters:
         - name: Authorization
