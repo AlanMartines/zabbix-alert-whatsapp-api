@@ -128,7 +128,66 @@ zabbix_export:
             throw 'Sending failed: ' + error + '.';
         }
       timeout: 10s
-      description: //TODO
+      description: |
+        Template de Alertas do Zabbix
+        
+        Alertas de Problemas (Triggers)
+           Fonte do Evento: TRIGGERS
+           Modo de Operação: PROBLEM
+           Assunto: "Problem: {EVENT.NAME}"
+           Mensagem:
+             Início do problema às `{EVENT.TIME}` em `{EVENT.DATE}`
+             Nome do problema: `{EVENT.NAME}`
+             Host: `{HOST.NAME}`
+             Severidade: `{EVENT.SEVERITY}`
+             Dados operacionais: `{EVENT.OPDATA}`
+             ID original do problema: `{EVENT.ID}`
+             URL do Trigger: `{TRIGGER.URL}`
+        
+        Alertas de Recuperação (Triggers)
+           Fonte do Evento: TRIGGERS
+           Modo de Operação: RECOVERY
+           Assunto: "Resolved in {EVENT.DURATION}: {EVENT.NAME}"
+           Mensagem:
+             Problema resolvido em `{EVENT.DURATION}` às `{EVENT.RECOVERY.TIME}` em `{EVENT.RECOVERY.DATE}`
+             Nome do problema: `{EVENT.NAME}`
+             Host: `{HOST.NAME}`
+             Severidade: `{EVENT.SEVERITY}`
+             ID original do problema: `{EVENT.ID}`
+             URL do Trigger: `{TRIGGER.URL}`
+        
+        Atualizações de Problemas (Triggers)
+           Fonte do Evento: TRIGGERS
+           Modo de Operação: UPDATE
+           Assunto: "Updated problem: {EVENT.NAME}"
+           Mensagem:
+             `{USER.FULLNAME}` `{EVENT.UPDATE.ACTION}` o problema em `{EVENT.UPDATE.DATE}` `{EVENT.UPDATE.TIME}`.
+             Mensagem de atualização: `{EVENT.UPDATE.MESSAGE}`
+             Status atual do problema: `{EVENT.STATUS}`, reconhecimento: `{EVENT.ACK.STATUS}`.
+        
+        Descoberta de Dispositivos (Discovery)
+           Fonte do Evento: DISCOVERY
+           Modo de Operação: PROBLEM
+           Assunto: "Discovery: {DISCOVERY.DEVICE.STATUS} {DISCOVERY.DEVICE.IPADDRESS}"
+           Mensagem:
+             Regra de descoberta: `{DISCOVERY.RULE.NAME}`
+             IP do dispositivo: `{DISCOVERY.DEVICE.IPADDRESS}`
+             DNS do dispositivo: `{DISCOVERY.DEVICE.DNS}`
+             Status do dispositivo: `{DISCOVERY.DEVICE.STATUS}`
+             Tempo de atividade do dispositivo: `{DISCOVERY.DEVICE.UPTIME}`
+             Nome do serviço do dispositivo: `{DISCOVERY.SERVICE.NAME}`
+             Porta do serviço do dispositivo: `{DISCOVERY.SERVICE.PORT}`
+             Status do serviço do dispositivo: `{DISCOVERY.SERVICE.STATUS}`
+             Tempo de atividade do serviço do dispositivo: `{DISCOVERY.SERVICE.UPTIME}`
+        
+        Auto-registro de Hosts (Auto Registration)
+           Fonte do Evento: AUTOREGISTRATION
+           Modo de Operação: PROBLEM
+           Assunto: "Autoregistration: {HOST.HOST}"
+           Mensagem:
+             Nome do host: `{HOST.HOST}`
+             IP do host: `{HOST.IP}`
+             Porta do agente: `{HOST.PORT}`
       message_templates:
         - event_source: TRIGGERS
           operation_mode: PROBLEM
