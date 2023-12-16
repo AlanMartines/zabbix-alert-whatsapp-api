@@ -1,7 +1,7 @@
 zabbix_export:
   version: "6.4"
   media_types:
-    - name: "WhatsApp ConnectZap API"
+    - name: "WhatsApp (ConnectZap API)"
       type: WEBHOOK
       parameters:
         - name: Authorization
@@ -9,7 +9,7 @@ zabbix_export:
         - name: Message
           value: "{ALERT.MESSAGE}"
         - name: ParseMode
-          value: markdown
+          value: ""
         - name: Subject
           value: "{ALERT.SUBJECT}"
         - name: To

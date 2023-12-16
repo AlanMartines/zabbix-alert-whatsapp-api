@@ -1,76 +1,85 @@
 zabbix_export:
-  version: "6.4"
+  version: '6.4'
   media_types:
-    - name: "WhatsApp (Whaticket API)"
+    - name: 'WhatsApp (Evolution API)'
       type: WEBHOOK
       parameters:
-        - name: Authorization
-          value: "Bearer <token_api>"
+        - name: ApiKey
+          value: <api_key>
+        - name: Instance
+          value: zabbixbot
         - name: Message
-          value: "{ALERT.MESSAGE}"
+          value: '{ALERT.MESSAGE}'
         - name: ParseMode
           value: ""
         - name: Subject
-          value: "{ALERT.SUBJECT}"
+          value: '{ALERT.SUBJECT}'
         - name: To
-          value: "{ALERT.SENDTO}"
+          value: '{ALERT.SENDTO}'
         - name: Url
-          value: "http://localhost:8080"
-      attempts: "1"
+          value: 'http://localhost:8080'
+      attempts: '1'
       script: |
         var WhatsApp = {
             baseurl: null,
-            Authorization: null,
+            instance: null,
+            apikey: null,
             to: null,
             message: null,
             proxy: null,
             parse_mode: null,
-
+        
             escapeMarkup: function (str, mode) {
                 switch (mode) {
                     case 'markdown':
                         return str.replace(/([_*\[`])/g, '\\$&');
-
+        
                     case 'markdownv2':
                         return str.replace(/([_*\[\]()~`>#+\-=|{}.!])/g, '\\$&');
-
+        
                     case 'html':
                         return str.replace(/<(\s|[^a-z\/])/g, '&lt;$1');
-
+        
                     default:
                         return str;
                 }
             },
-
+        
             sendMessage: function () {
                 var params = {
-                        "number": WhatsApp.to,
-                        "body": WhatsApp.message
+                    number: WhatsApp.to,
+                    options: {
+                        delay: 1200,
+                        presence: "composing"
+                    },
+                    textMessage: {
+                        "text": WhatsApp.message
+                    }
                 },
                 data,
                 response,
                 request = new HttpRequest(),
-                url = WhatsApp.baseurl + '/api/messages/send';
-
+                url = WhatsApp.baseurl + '/message/sendText/' + WhatsApp.instance;
+        
                 if (WhatsApp.parse_mode !== null) {
                     params['parse_mode'] = WhatsApp.parse_mode;
                 }
-
+        
                 if (WhatsApp.proxy) {
                     request.setProxy(WhatsApp.proxy);
                 }
-
+        
                 request.addHeader('Content-Type: application/json');
-                request.addHeader('Authorization: ' + WhatsApp.Authorization);
+                request.addHeader('apikey: ' + WhatsApp.apikey);
                 data = JSON.stringify(params);
-
+        
                 // Remove replace() function if you want to see the exposed token in the log file.
                 Zabbix.log(4, '[WhatsApp Webhook] URL: ' + url);
                 Zabbix.log(4, '[WhatsApp Webhook] params: ' + data);
                 response = request.post(url, data);
                 Zabbix.log(4, '[WhatsApp Webhook] HTTP code: ' + request.getStatus());
-
-                if (request.getStatus() == 200 || request.getStatus() == 201 || request.getStatus() == 202) {
+        
+                if (request.getStatus() == 201) {
                     // we did it. lets just exit for now.
                     Zabbix.log(4, '[WhatsApp Webhook] request sent successfully');
                     return;
@@ -79,40 +88,45 @@ zabbix_export:
                 }
             }
         };
-
+        
         try {
             var params = JSON.parse(value);
-
+        
             if (typeof params.Url === 'undefined') {
                 throw 'Incorrect value is given for parameter "Url": parameter is missing';
             }
-
-            if (typeof params.Authorization === 'undefined') {
-                throw 'Incorrect value is given for parameter "Authorization": parameter is missing';
+            
+            if (typeof params.Instance === 'undefined') {
+                throw 'Incorrect value is given for parameter "Instance": parameter is missing';
             }
-
+            
+            if (typeof params.ApiKey === 'undefined') {
+                throw 'Incorrect value is given for parameter "ApiKey": parameter is missing';
+            }
+        
+            WhatsApp.instance = params.Instance;
             WhatsApp.baseurl = params.Url;
-            WhatsApp.Authorization = params.Authorization;
-
+            WhatsApp.apikey = params.ApiKey;
+        
             if (params.HTTPProxy) {
                 WhatsApp.proxy = params.HTTPProxy;
             } 
-
+        
             params.ParseMode = params.ParseMode.toLowerCase();
             
             if (['markdown', 'html', 'markdownv2'].indexOf(params.ParseMode) !== -1) {
                 WhatsApp.parse_mode = params.ParseMode;
             }
-
+        
             WhatsApp.to = params.To;
             WhatsApp.message = params.Subject + '\n' + params.Message;
-
+        
             if (['markdown', 'html', 'markdownv2'].indexOf(params.ParseMode) !== -1) {
                 WhatsApp.message = WhatsApp.escapeMarkup(WhatsApp.message, params.ParseMode);
             }
-
+        
             WhatsApp.sendMessage();
-
+        
             return 'OK';
         }
         catch (error) {
