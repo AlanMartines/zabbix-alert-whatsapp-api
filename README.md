@@ -63,3 +63,14 @@
   - Nome do host: `{HOST.HOST}`
   - IP do host: `{HOST.IP}`
   - Porta do agente: `{HOST.PORT}`
+
+# Nota Importante sobre Uso de Emojis nos Alertas do Zabbix
+
+Ao configurar emojis nos alertas do Zabbix, é crucial garantir que a base de dados do Zabbix esteja configurada com as codificações apropriadas para suportar emojis. As configurações necessárias são:
+
+- **Conjunto de Caracteres (Character Set)**: `utf8mb4`
+- **Collation**: `utf8mb4_unicode_ci`
+
+Essas configurações garantem que a base de dados possa armazenar e processar corretamente emojis e outros caracteres Unicode que requerem mais de 3 bytes de armazenamento.
+
+Certifique-se de que estas configurações estejam aplicadas tanto no nível do servidor de banco de dados quanto nas configurações específicas do banco de dados do Zabbix para evitar quaisquer problemas de compatibilidade ou exibição de caracteres.
