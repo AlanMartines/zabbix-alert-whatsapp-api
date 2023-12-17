@@ -64,7 +64,7 @@
   - IP do host: `{HOST.IP}`
   - Porta do agente: `{HOST.PORT}`
 
-# Nota Importante sobre Uso de Emojis nos Alertas do Zabbix
+# Nota Importante para Uso de Emojis nos Alertas
 
 Ao configurar emojis nos alertas do Zabbix, é crucial garantir que a base de dados do Zabbix esteja configurada com as codificações apropriadas para suportar emojis. As configurações necessárias são:
 
