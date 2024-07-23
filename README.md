@@ -74,3 +74,12 @@ Ao configurar emojis nos alertas do Zabbix, é crucial garantir que a base de da
 Essas configurações garantem que a base de dados possa armazenar e processar corretamente emojis e outros caracteres Unicode que requerem mais de 3 bytes de armazenamento.
 
 Certifique-se de que estas configurações estejam aplicadas tanto no nível do servidor de banco de dados quanto nas configurações específicas do banco de dados do Zabbix para evitar quaisquer problemas de compatibilidade ou exibição de caracteres.
+
+
+# Testado com
+- mysql: 8.0.
+- zabbix-snmptraps: 7.0.1.
+- zabbix-server: 7.0.1.
+- zabbix-frontend: 7.0.1.
+- zabbix-agent 2: 7.0.1.
+
