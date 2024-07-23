@@ -1,7 +1,7 @@
 # Zabbix Alert Whatsapp API
 - Integração do zabbix com api do [Whaticket](https://github.com/AlanMartines/whaticket_baileys) para envio de notificações.
 - Integração do zabbix com api da [ConnectZap](https://www.connectzap.com.br) para envio de notificações.
-- Integração do zabbix com api da [Evolution]([https://www.connectzap.com.br/](https://doc.evolution-api.com/pt/get-started/introduction)) para envio de notificações.
+- Integração do zabbix com api da [Evolution](https://doc.evolution-api.com/pt/get-started/introduction) para envio de notificações.
 
 
 # Template de Alertas do Zabbix
