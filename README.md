@@ -78,8 +78,8 @@ Certifique-se de que estas configurações estejam aplicadas tanto no nível do 
 
 # Testado com
 - mysql: 8.0.
-- zabbix-snmptraps: 7.0.1.
-- zabbix-server: 7.0.1.
-- zabbix-frontend: 7.0.1.
-- zabbix-agent 2: 7.0.1.
+- zabbix-snmptraps: 7.0.
+- zabbix-server: 7.0.
+- zabbix-frontend: 7.0.
+- zabbix-agent 2: 7.0.
 
