@@ -1,0 +1,138 @@
+zabbix_export:
+  version: '6.4'
+  media_types:
+    - name: 'WhatsApp ConnectZap API - To Group Graphic'
+      type: SCRIPT
+      script_name: whatsapp-graph.py
+      parameters:
+        - sortorder: '0'
+          value: '<url_zabbix>'
+        - sortorder: '1'
+          value: '<zbx_login>'
+        - sortorder: '2'
+          value: '<zbx_pwd>'
+        - sortorder: '3'
+          value: '{ITEM.ID}'
+        - sortorder: '4'
+          value: '<url_api>'
+        - sortorder: '5'
+          value: '<token_api>'
+        - sortorder: '6'
+          value: '{ALERT.SENDTO}'
+        - sortorder: '7'
+          value: '{ALERT.SUBJECT}'
+        - sortorder: '8'
+          value: '{ALERT.MESSAGE}'
+      attempts: '1'
+      description: |
+        Template de Alertas do Zabbix
+        
+        Alertas de Problemas (Triggers)
+           Fonte do Evento: TRIGGERS
+           Modo de Operação: PROBLEM
+           Assunto: "Problem: {EVENT.NAME}"
+           Mensagem:
+             Início do problema às `{EVENT.TIME}` em `{EVENT.DATE}`
+             Nome do problema: `{EVENT.NAME}`
+             Host: `{HOST.NAME}`
+             Severidade: `{EVENT.SEVERITY}`
+             Dados operacionais: `{EVENT.OPDATA}`
+             ID original do problema: `{EVENT.ID}`
+             URL do Trigger: `{TRIGGER.URL}`
+        
+        Alertas de Recuperação (Triggers)
+           Fonte do Evento: TRIGGERS
+           Modo de Operação: RECOVERY
+           Assunto: "Resolved in {EVENT.DURATION}: {EVENT.NAME}"
+           Mensagem:
+             Problema resolvido em `{EVENT.DURATION}` às `{EVENT.RECOVERY.TIME}` em `{EVENT.RECOVERY.DATE}`
+             Nome do problema: `{EVENT.NAME}`
+             Host: `{HOST.NAME}`
+             Severidade: `{EVENT.SEVERITY}`
+             ID original do problema: `{EVENT.ID}`
+             URL do Trigger: `{TRIGGER.URL}`
+        
+        Atualizações de Problemas (Triggers)
+           Fonte do Evento: TRIGGERS
+           Modo de Operação: UPDATE
+           Assunto: "Updated problem: {EVENT.NAME}"
+           Mensagem:
+             `{USER.FULLNAME}` `{EVENT.UPDATE.ACTION}` o problema em `{EVENT.UPDATE.DATE}` `{EVENT.UPDATE.TIME}`.
+             Mensagem de atualização: `{EVENT.UPDATE.MESSAGE}`
+             Status atual do problema: `{EVENT.STATUS}`, reconhecimento: `{EVENT.ACK.STATUS}`.
+        
+        Descoberta de Dispositivos (Discovery)
+           Fonte do Evento: DISCOVERY
+           Modo de Operação: PROBLEM
+           Assunto: "Discovery: {DISCOVERY.DEVICE.STATUS} {DISCOVERY.DEVICE.IPADDRESS}"
+           Mensagem:
+             Regra de descoberta: `{DISCOVERY.RULE.NAME}`
+             IP do dispositivo: `{DISCOVERY.DEVICE.IPADDRESS}`
+             DNS do dispositivo: `{DISCOVERY.DEVICE.DNS}`
+             Status do dispositivo: `{DISCOVERY.DEVICE.STATUS}`
+             Tempo de atividade do dispositivo: `{DISCOVERY.DEVICE.UPTIME}`
+             Nome do serviço do dispositivo: `{DISCOVERY.SERVICE.NAME}`
+             Porta do serviço do dispositivo: `{DISCOVERY.SERVICE.PORT}`
+             Status do serviço do dispositivo: `{DISCOVERY.SERVICE.STATUS}`
+             Tempo de atividade do serviço do dispositivo: `{DISCOVERY.SERVICE.UPTIME}`
+        
+        Auto-registro de Hosts (Auto Registration)
+           Fonte do Evento: AUTOREGISTRATION
+           Modo de Operação: PROBLEM
+           Assunto: "Autoregistration: {HOST.HOST}"
+           Mensagem:
+             Nome do host: `{HOST.HOST}`
+             IP do host: `{HOST.IP}`
+             Porta do agente: `{HOST.PORT}`
+      message_templates:
+        - event_source: TRIGGERS
+          operation_mode: PROBLEM
+          subject: '❌ *Problem:* {EVENT.NAME}'
+          message: |
+            🕒 *Problem started:* {EVENT.TIME} on {EVENT.DATE}
+            🚩 *Problem name:* {EVENT.NAME}
+            💻 *Host:* {HOST.NAME}
+            🚨 *Severity:* {EVENT.SEVERITY}
+            🔍 *Operational data:* {EVENT.OPDATA}
+            🆔 *Original problem ID:* {EVENT.ID}
+            🔗 {TRIGGER.URL}
+        - event_source: TRIGGERS
+          operation_mode: RECOVERY
+          subject: '✅ *Resolved:* {EVENT.DURATION}: {EVENT.NAME}'
+          message: |
+            ⏱️ *Problem resolved:* {EVENT.DURATION} at {EVENT.RECOVERY.TIME} on {EVENT.RECOVERY.DATE}
+            🚩 *Problem name:* {EVENT.NAME}
+            💻 *Host:* {HOST.NAME}
+            🚨 *Severity:* {EVENT.SEVERITY}
+            🆔 *Original problem ID:* {EVENT.ID}
+            🔗 {TRIGGER.URL}
+        - event_source: TRIGGERS
+          operation_mode: UPDATE
+          subject: '🔄 *Updated problem:* {EVENT.NAME}'
+          message: |
+            👤 {USER.FULLNAME} {EVENT.UPDATE.ACTION} problem at {EVENT.UPDATE.DATE} {EVENT.UPDATE.TIME}.
+            📝 {EVENT.UPDATE.MESSAGE}
+            
+            *Current problem status:* {EVENT.STATUS}, acknowledged: {EVENT.ACK.STATUS}.
+        - event_source: DISCOVERY
+          operation_mode: PROBLEM
+          subject: '🔍 Discovery: {DISCOVERY.DEVICE.STATUS} {DISCOVERY.DEVICE.IPADDRESS}'
+          message: |
+            📡 *Discovery rule:* {DISCOVERY.RULE.NAME}
+            
+            🌐 *Device IP:* {DISCOVERY.DEVICE.IPADDRESS}
+            🌐 *Device DNS:* {DISCOVERY.DEVICE.DNS}
+            📶 *Device status:* {DISCOVERY.DEVICE.STATUS}
+            ⏳ *Device uptime:* {DISCOVERY.DEVICE.UPTIME}
+            
+            🛠️ *Device service name:* {DISCOVERY.SERVICE.NAME}
+            🚪 *Device service port:* {DISCOVERY.SERVICE.PORT}
+            📶 *Device service status:* {DISCOVERY.SERVICE.STATUS}
+            ⏳ *Device service uptime:* {DISCOVERY.SERVICE.UPTIME}
+        - event_source: AUTOREGISTRATION
+          operation_mode: PROBLEM
+          subject: '📥 Autoregistration: {HOST.HOST}'
+          message: |
+            💻 *Host name:* {HOST.HOST}
+            🌐 *Host IP:* {HOST.IP}
+            🚪 *Agent port:* {HOST.PORT}
