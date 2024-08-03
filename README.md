@@ -83,3 +83,11 @@ Certifique-se de que estas configurações estejam aplicadas tanto no nível do 
 - zabbix-frontend: 7.0.
 - zabbix-agent 2: 7.0.
 
+
+# Contribuições
+
+[Contribuições](CONTRIBUTING.md) são bem-vindas! Por favor, abra uma issue ou pull request.
+
+# Licença
+
+Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.
