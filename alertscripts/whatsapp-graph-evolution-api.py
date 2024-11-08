@@ -145,15 +145,12 @@ def main():
     wa_send_url = f'{_WA_API_URL}/message/sendMedia/{_WA_INSTANCE}'
     data = {
 				"number": _WA_TO,
-				"options": {
-						"delay": 1200,
-						"presence": "composing"
-				},
-				"mediaMessage": {
-						"mediatype": "image",
-						"caption": wa_msg,
-						"media": base64_image
-				}
+				"mediatype": "image",
+				"mimetype": "image/png",
+				"caption": wa_msg,
+    		"media": base64_image,
+				"fileName": "chart.png",
+				"delay": 1200
 		}
     
     headers = {
