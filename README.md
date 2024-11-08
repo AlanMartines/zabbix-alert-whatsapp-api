@@ -1,7 +1,7 @@
 # Zabbix Alert Whatsapp API
-- Integração do zabbix com api do Whaticket para envio de notificações.
-- Integração do zabbix com api da ConnectZap para envio de notificações.
-- Integração do zabbix com api da Evolution para envio de notificações.
+- Integração do zabbix com api do [Whaticket](https://github.com/AlanMartines/whaticket_baileys) para envio de notificações.
+- Integração do zabbix com api da [ConnectZap](https://www.connectzap.com.br) para envio de notificações.
+- Integração do zabbix com api da [Evolution](https://doc.evolution-api.com/pt/get-started/introduction) para envio de notificações.
 
 
 # Template de Alertas do Zabbix
@@ -74,3 +74,20 @@ Ao configurar emojis nos alertas do Zabbix, é crucial garantir que a base de da
 Essas configurações garantem que a base de dados possa armazenar e processar corretamente emojis e outros caracteres Unicode que requerem mais de 3 bytes de armazenamento.
 
 Certifique-se de que estas configurações estejam aplicadas tanto no nível do servidor de banco de dados quanto nas configurações específicas do banco de dados do Zabbix para evitar quaisquer problemas de compatibilidade ou exibição de caracteres.
+
+
+# Testado com
+- mysql: 8.0.
+- zabbix-snmptraps: 7.0.
+- zabbix-server: 7.0.
+- zabbix-frontend: 7.0.
+- zabbix-agent 2: 7.0.
+
+
+# Contribuições
+
+[Contribuições](CONTRIBUTING.md) são bem-vindas! Por favor, abra uma issue ou pull request.
+
+# Licença
+
+Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.
