@@ -46,15 +46,9 @@ zabbix_export:
             },
         
             sendMessage: function () {
-                var params = {
-                    number: WhatsApp.to,
-                    options: {
-                        delay: 1200,
-                        presence: "composing"
-                    },
-                    textMessage: {
-                        "text": WhatsApp.message
-                    }
+                    "number": WhatsApp.to,
+                    "delay": 1200,
+                    "text": WhatsApp.message
                 },
                 data,
                 response,
