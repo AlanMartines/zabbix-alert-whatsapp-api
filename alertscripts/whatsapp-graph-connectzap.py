@@ -112,7 +112,7 @@ def main():
     }
 
     # Faz login
-    response = session.post(login_url, data=login_data)
+    response = session.post(login_url, data=login_data, verify=False)
 
     # Verifica se o login foi bem-sucedido
     if 'Falha no login' in response.text:
@@ -123,7 +123,7 @@ def main():
     graph_url = f'{_ZABBIX_BASE}/chart.php?from={_from}&to={_to}&itemids[0]={_ZABBIX_ITEM_ID}&type={_type}&profileIdx={_profileIdx}&width={_with}&height={_height}'
 
     # Faz a requisição do gráfico
-    graph_response = session.get(graph_url)
+    graph_response = session.get(graph_url, verify=False)
 
     # Verifica se a requisição foi bem-sucedida
     if graph_response.status_code != 200:
@@ -147,7 +147,7 @@ def main():
     }
     headers = {'Content-Type': 'application/json'}
 
-    response = requests.post(wa_send_url, json=data, headers=headers)
+    response = requests.post(wa_send_url, json=data, headers=headers, verify=False)
 
     # Verifica se o envio foi bem-sucedido
     if response.status_code == 200:
