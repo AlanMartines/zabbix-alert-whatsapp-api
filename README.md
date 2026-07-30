@@ -51,8 +51,8 @@ Copie o script correspondente para o diretório `AlertScriptsPath` do servidor
 Zabbix (por padrão `/usr/lib/zabbix/alertscripts/`):
 
 ```bash
-install -o zabbix -g zabbix -m 0750 \
-  alertscripts/whatsapp-graph-uazapi.py /usr/lib/zabbix/alertscripts/
+sudo install -o zabbix -g zabbix -m 0750 alertscripts/whatsapp-graph-uazapi.py /usr/lib/zabbix/alertscripts/
+sudo apt install -y python3-requests
 pip install requests
 ```
 
