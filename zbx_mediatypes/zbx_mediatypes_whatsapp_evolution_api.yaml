@@ -1,5 +1,5 @@
 zabbix_export:
-  version: '6.4'
+  version: '7.4'
   media_types:
     - name: 'WhatsApp (Evolution API)'
       type: WEBHOOK
@@ -52,11 +52,8 @@ zabbix_export:
                 var request = new HttpRequest(),
                     url = WhatsApp.baseurl + '/message/sendText/' + WhatsApp.instance,
                     data = JSON.stringify(params),
+                    status,
                     response;
-
-                if (WhatsApp.parse_mode !== null) {
-                    params['parse_mode'] = WhatsApp.parse_mode;
-                }
 
                 if (WhatsApp.proxy) {
                     request.setProxy(WhatsApp.proxy);
@@ -69,14 +66,18 @@ zabbix_export:
                 Zabbix.log(4, '[WhatsApp Webhook] params: ' + data);
 
                 response = request.post(url, data);
-                Zabbix.log(4, '[WhatsApp Webhook] HTTP code: ' + request.getStatus());
+                status = request.getStatus();
 
-                if (request.getStatus() == 201) {
+                Zabbix.log(4, '[WhatsApp Webhook] HTTP code: ' + status);
+                Zabbix.log(4, '[WhatsApp Webhook] response: ' + response);
+
+                // A Evolution API responde 201 no envio e 200 em algumas versões.
+                if (status === 200 || status === 201) {
                     Zabbix.log(4, '[WhatsApp Webhook] request sent successfully');
                     return;
-                } else {
-                    throw 'Unknown error. Check debug log for more information.';
                 }
+
+                throw 'HTTP ' + status + ': ' + response;
             }
         };
 
@@ -95,6 +96,10 @@ zabbix_export:
                 throw 'Incorrect value is given for parameter "ApiKey": parameter is missing';
             }
 
+            if (typeof params.To === 'undefined' || params.To === '') {
+                throw 'Incorrect value is given for parameter "To": parameter is missing';
+            }
+
             WhatsApp.instance = params.Instance;
             WhatsApp.baseurl = params.Url;
             WhatsApp.apikey = params.ApiKey;
@@ -103,7 +108,9 @@ zabbix_export:
                 WhatsApp.proxy = params.HTTPProxy;
             } 
 
-            params.ParseMode = params.ParseMode.toLowerCase();
+            params.ParseMode = (typeof params.ParseMode === 'string')
+                ? params.ParseMode.toLowerCase()
+                : '';
 
             if (['markdown', 'html', 'markdownv2'].indexOf(params.ParseMode) !== -1) {
                 WhatsApp.parse_mode = params.ParseMode;

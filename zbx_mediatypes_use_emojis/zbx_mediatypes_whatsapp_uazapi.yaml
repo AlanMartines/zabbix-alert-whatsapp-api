@@ -1,13 +1,9 @@
 zabbix_export:
   version: '7.4'
   media_types:
-    - name: 'WhatsApp (Evolution API)'
+    - name: 'WhatsApp (uazapiGO)'
       type: WEBHOOK
       parameters:
-        - name: ApiKey
-          value: <api_key>
-        - name: Instance
-          value: zabbixbot
         - name: Message
           value: '{ALERT.MESSAGE}'
         - name: ParseMode
@@ -16,14 +12,20 @@ zabbix_export:
           value: '{ALERT.SUBJECT}'
         - name: To
           value: '{ALERT.SENDTO}'
+        - name: Token
+          value: <token>
         - name: Url
-          value: 'http://localhost:8080'
+          value: 'https://suaconta.uazapi.com'
       attempts: '1'
       script: |
+        // uazapiGO - POST {Url}/send/text
+        // https://docs.uazapi.com/endpoint/post/send~text
+        //
+        // A URL base inclui o subdominio da conta (https://suaconta.uazapi.com).
+        // A instancia e identificada pelo Token, enviado no header `token`.
         var WhatsApp = {
             baseurl: null,
-            instance: null,
-            apikey: null,
+            token: null,
             to: null,
             message: null,
             proxy: null,
@@ -45,12 +47,12 @@ zabbix_export:
             sendMessage: function () {
                 var params = {
                     "number": WhatsApp.to,
-                    "delay": 1200,
-                    "text": WhatsApp.message
+                    "text": WhatsApp.message,
+                    "delay": 1200
                 };
 
                 var request = new HttpRequest(),
-                    url = WhatsApp.baseurl + '/message/sendText/' + WhatsApp.instance,
+                    url = WhatsApp.baseurl + '/send/text',
                     data = JSON.stringify(params),
                     status,
                     response;
@@ -60,20 +62,19 @@ zabbix_export:
                 }
 
                 request.addHeader('Content-Type: application/json');
-                request.addHeader('apikey: ' + WhatsApp.apikey);
+                request.addHeader('token: ' + WhatsApp.token);
 
-                Zabbix.log(4, '[WhatsApp Webhook] URL: ' + url);
-                Zabbix.log(4, '[WhatsApp Webhook] params: ' + data);
+                Zabbix.log(4, '[uazapi Webhook] URL: ' + url);
+                Zabbix.log(4, '[uazapi Webhook] params: ' + data);
 
                 response = request.post(url, data);
                 status = request.getStatus();
 
-                Zabbix.log(4, '[WhatsApp Webhook] HTTP code: ' + status);
-                Zabbix.log(4, '[WhatsApp Webhook] response: ' + response);
+                Zabbix.log(4, '[uazapi Webhook] HTTP code: ' + status);
+                Zabbix.log(4, '[uazapi Webhook] response: ' + response);
 
-                // A Evolution API responde 201 no envio e 200 em algumas versões.
                 if (status === 200 || status === 201) {
-                    Zabbix.log(4, '[WhatsApp Webhook] request sent successfully');
+                    Zabbix.log(4, '[uazapi Webhook] request sent successfully');
                     return;
                 }
 
@@ -87,26 +88,21 @@ zabbix_export:
             if (typeof params.Url === 'undefined') {
                 throw 'Incorrect value is given for parameter "Url": parameter is missing';
             }
-            
-            if (typeof params.Instance === 'undefined') {
-                throw 'Incorrect value is given for parameter "Instance": parameter is missing';
-            }
-            
-            if (typeof params.ApiKey === 'undefined') {
-                throw 'Incorrect value is given for parameter "ApiKey": parameter is missing';
+
+            if (typeof params.Token === 'undefined') {
+                throw 'Incorrect value is given for parameter "Token": parameter is missing';
             }
 
             if (typeof params.To === 'undefined' || params.To === '') {
                 throw 'Incorrect value is given for parameter "To": parameter is missing';
             }
 
-            WhatsApp.instance = params.Instance;
             WhatsApp.baseurl = params.Url;
-            WhatsApp.apikey = params.ApiKey;
+            WhatsApp.token = params.Token;
 
             if (params.HTTPProxy) {
                 WhatsApp.proxy = params.HTTPProxy;
-            } 
+            }
 
             params.ParseMode = (typeof params.ParseMode === 'string')
                 ? params.ParseMode.toLowerCase()
@@ -128,13 +124,17 @@ zabbix_export:
             return 'OK';
         }
         catch (error) {
-            Zabbix.log(4, '[WhatsApp Webhook] notification failed: ' + error);
+            Zabbix.log(4, '[uazapi Webhook] notification failed: ' + error);
             throw 'Sending failed: ' + error + '.';
         }
       timeout: 10s
       description: |
-        Template de Alertas do Zabbix
-        
+        Template de Alertas do Zabbix - uazapiGO
+
+        A URL base inclui o subdominio da conta: https://suaconta.uazapi.com
+        A instancia e identificada pelo Token (header `token`).
+        Endpoint utilizado: POST {Url}/send/text
+
         Alertas de Problemas (Triggers)
            Fonte do Evento: TRIGGERS
            Modo de Operação: PROBLEM
@@ -147,7 +147,7 @@ zabbix_export:
              Dados operacionais: `{EVENT.OPDATA}`
              ID original do problema: `{EVENT.ID}`
              URL do Trigger: `{TRIGGER.URL}`
-        
+
         Alertas de Recuperação (Triggers)
            Fonte do Evento: TRIGGERS
            Modo de Operação: RECOVERY
@@ -159,7 +159,7 @@ zabbix_export:
              Severidade: `{EVENT.SEVERITY}`
              ID original do problema: `{EVENT.ID}`
              URL do Trigger: `{TRIGGER.URL}`
-        
+
         Atualizações de Problemas (Triggers)
            Fonte do Evento: TRIGGERS
            Modo de Operação: UPDATE
@@ -168,7 +168,7 @@ zabbix_export:
              `{USER.FULLNAME}` `{EVENT.UPDATE.ACTION}` o problema em `{EVENT.UPDATE.DATE}` `{EVENT.UPDATE.TIME}`.
              Mensagem de atualização: `{EVENT.UPDATE.MESSAGE}`
              Status atual do problema: `{EVENT.STATUS}`, reconhecimento: `{EVENT.ACK.STATUS}`.
-        
+
         Descoberta de Dispositivos (Discovery)
            Fonte do Evento: DISCOVERY
            Modo de Operação: PROBLEM
@@ -183,7 +183,7 @@ zabbix_export:
              Porta do serviço do dispositivo: `{DISCOVERY.SERVICE.PORT}`
              Status do serviço do dispositivo: `{DISCOVERY.SERVICE.STATUS}`
              Tempo de atividade do serviço do dispositivo: `{DISCOVERY.SERVICE.UPTIME}`
-        
+
         Auto-registro de Hosts (Auto Registration)
            Fonte do Evento: AUTOREGISTRATION
            Modo de Operação: PROBLEM

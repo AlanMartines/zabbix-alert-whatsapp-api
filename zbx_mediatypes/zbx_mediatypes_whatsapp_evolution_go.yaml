@@ -1,13 +1,11 @@
 zabbix_export:
   version: '7.4'
   media_types:
-    - name: 'WhatsApp (Evolution API)'
+    - name: 'WhatsApp (Evolution Go)'
       type: WEBHOOK
       parameters:
         - name: ApiKey
           value: <api_key>
-        - name: Instance
-          value: zabbixbot
         - name: Message
           value: '{ALERT.MESSAGE}'
         - name: ParseMode
@@ -20,9 +18,14 @@ zabbix_export:
           value: 'http://localhost:8080'
       attempts: '1'
       script: |
+        // Evolution Go - POST {Url}/send/text
+        // https://docs.evolutionfoundation.com.br/evolution-go/send-a-text-message
+        //
+        // Diferente da Evolution API, a instância nao vai no path: ela e
+        // identificada pelo token informado em ApiKey (token global ou o token
+        // da instancia, obtido em GET /instance/all).
         var WhatsApp = {
             baseurl: null,
-            instance: null,
             apikey: null,
             to: null,
             message: null,
@@ -50,7 +53,7 @@ zabbix_export:
                 };
 
                 var request = new HttpRequest(),
-                    url = WhatsApp.baseurl + '/message/sendText/' + WhatsApp.instance,
+                    url = WhatsApp.baseurl + '/send/text',
                     data = JSON.stringify(params),
                     status,
                     response;
@@ -62,18 +65,17 @@ zabbix_export:
                 request.addHeader('Content-Type: application/json');
                 request.addHeader('apikey: ' + WhatsApp.apikey);
 
-                Zabbix.log(4, '[WhatsApp Webhook] URL: ' + url);
-                Zabbix.log(4, '[WhatsApp Webhook] params: ' + data);
+                Zabbix.log(4, '[WhatsApp Go Webhook] URL: ' + url);
+                Zabbix.log(4, '[WhatsApp Go Webhook] params: ' + data);
 
                 response = request.post(url, data);
                 status = request.getStatus();
 
-                Zabbix.log(4, '[WhatsApp Webhook] HTTP code: ' + status);
-                Zabbix.log(4, '[WhatsApp Webhook] response: ' + response);
+                Zabbix.log(4, '[WhatsApp Go Webhook] HTTP code: ' + status);
+                Zabbix.log(4, '[WhatsApp Go Webhook] response: ' + response);
 
-                // A Evolution API responde 201 no envio e 200 em algumas versões.
                 if (status === 200 || status === 201) {
-                    Zabbix.log(4, '[WhatsApp Webhook] request sent successfully');
+                    Zabbix.log(4, '[WhatsApp Go Webhook] request sent successfully');
                     return;
                 }
 
@@ -87,11 +89,7 @@ zabbix_export:
             if (typeof params.Url === 'undefined') {
                 throw 'Incorrect value is given for parameter "Url": parameter is missing';
             }
-            
-            if (typeof params.Instance === 'undefined') {
-                throw 'Incorrect value is given for parameter "Instance": parameter is missing';
-            }
-            
+
             if (typeof params.ApiKey === 'undefined') {
                 throw 'Incorrect value is given for parameter "ApiKey": parameter is missing';
             }
@@ -100,13 +98,12 @@ zabbix_export:
                 throw 'Incorrect value is given for parameter "To": parameter is missing';
             }
 
-            WhatsApp.instance = params.Instance;
             WhatsApp.baseurl = params.Url;
             WhatsApp.apikey = params.ApiKey;
 
             if (params.HTTPProxy) {
                 WhatsApp.proxy = params.HTTPProxy;
-            } 
+            }
 
             params.ParseMode = (typeof params.ParseMode === 'string')
                 ? params.ParseMode.toLowerCase()
@@ -128,13 +125,16 @@ zabbix_export:
             return 'OK';
         }
         catch (error) {
-            Zabbix.log(4, '[WhatsApp Webhook] notification failed: ' + error);
+            Zabbix.log(4, '[WhatsApp Go Webhook] notification failed: ' + error);
             throw 'Sending failed: ' + error + '.';
         }
       timeout: 10s
       description: |
-        Template de Alertas do Zabbix
-        
+        Template de Alertas do Zabbix - Evolution Go
+
+        A instancia e identificada pelo token informado no parametro ApiKey.
+        Endpoint utilizado: POST {Url}/send/text
+
         Alertas de Problemas (Triggers)
            Fonte do Evento: TRIGGERS
            Modo de Operação: PROBLEM
@@ -147,7 +147,7 @@ zabbix_export:
              Dados operacionais: `{EVENT.OPDATA}`
              ID original do problema: `{EVENT.ID}`
              URL do Trigger: `{TRIGGER.URL}`
-        
+
         Alertas de Recuperação (Triggers)
            Fonte do Evento: TRIGGERS
            Modo de Operação: RECOVERY
@@ -159,7 +159,7 @@ zabbix_export:
              Severidade: `{EVENT.SEVERITY}`
              ID original do problema: `{EVENT.ID}`
              URL do Trigger: `{TRIGGER.URL}`
-        
+
         Atualizações de Problemas (Triggers)
            Fonte do Evento: TRIGGERS
            Modo de Operação: UPDATE
@@ -168,7 +168,7 @@ zabbix_export:
              `{USER.FULLNAME}` `{EVENT.UPDATE.ACTION}` o problema em `{EVENT.UPDATE.DATE}` `{EVENT.UPDATE.TIME}`.
              Mensagem de atualização: `{EVENT.UPDATE.MESSAGE}`
              Status atual do problema: `{EVENT.STATUS}`, reconhecimento: `{EVENT.ACK.STATUS}`.
-        
+
         Descoberta de Dispositivos (Discovery)
            Fonte do Evento: DISCOVERY
            Modo de Operação: PROBLEM
@@ -183,7 +183,7 @@ zabbix_export:
              Porta do serviço do dispositivo: `{DISCOVERY.SERVICE.PORT}`
              Status do serviço do dispositivo: `{DISCOVERY.SERVICE.STATUS}`
              Tempo de atividade do serviço do dispositivo: `{DISCOVERY.SERVICE.UPTIME}`
-        
+
         Auto-registro de Hosts (Auto Registration)
            Fonte do Evento: AUTOREGISTRATION
            Modo de Operação: PROBLEM
@@ -193,58 +193,54 @@ zabbix_export:
              IP do host: `{HOST.IP}`
              Porta do agente: `{HOST.PORT}`
       message_templates:
-          - event_source: TRIGGERS
-            operation_mode: PROBLEM
-            subject: "❌ *Problem:* {EVENT.NAME}"
-            message: |
-              🕒 *Problem started:* {EVENT.TIME} on {EVENT.DATE}
-              🚩 *Problem name:* {EVENT.NAME}
-              💻 *Host:* {HOST.NAME}
-              🚨 *Severity:* {EVENT.SEVERITY}
-              🔍 *Operational data:* {EVENT.OPDATA}
-              🆔 *Original problem ID:* {EVENT.ID}
-              🔗 {TRIGGER.URL}
+        - event_source: TRIGGERS
+          operation_mode: PROBLEM
+          subject: "*Problem:* {EVENT.NAME}"
+          message: |
+            *Problem started:* {EVENT.TIME} on {EVENT.DATE}
+            *Problem name:* {EVENT.NAME}
+            *Host:* {HOST.NAME}
+            *Severity:* {EVENT.SEVERITY}
+            *Operational data:* {EVENT.OPDATA}
+            *Original problem ID:* {EVENT.ID}
+            {TRIGGER.URL}
+        - event_source: TRIGGERS
+          operation_mode: RECOVERY
+          subject: "*Resolved:* {EVENT.DURATION}: {EVENT.NAME}"
+          message: |
+            *Problem resolved:* {EVENT.DURATION} at {EVENT.RECOVERY.TIME} on {EVENT.RECOVERY.DATE}
+            *Problem name:* {EVENT.NAME}
+            *Host:* {HOST.NAME}
+            *Severity:* {EVENT.SEVERITY}
+            *Original problem ID:* {EVENT.ID}
+            {TRIGGER.URL}
+        - event_source: TRIGGERS
+          operation_mode: UPDATE
+          subject: "*Updated problem:* {EVENT.NAME}"
+          message: |
+            {USER.FULLNAME} {EVENT.UPDATE.ACTION} problem at {EVENT.UPDATE.DATE} {EVENT.UPDATE.TIME}.
+            {EVENT.UPDATE.MESSAGE}
 
-          - event_source: TRIGGERS
-            operation_mode: RECOVERY
-            subject: "✅ *Resolved:* {EVENT.DURATION}: {EVENT.NAME}"
-            message: |
-              ⏱️ *Problem resolved:* {EVENT.DURATION} at {EVENT.RECOVERY.TIME} on {EVENT.RECOVERY.DATE}
-              🚩 *Problem name:* {EVENT.NAME}
-              💻 *Host:* {HOST.NAME}
-              🚨 *Severity:* {EVENT.SEVERITY}
-              🆔 *Original problem ID:* {EVENT.ID}
-              🔗 {TRIGGER.URL}
+            Current problem status is {EVENT.STATUS}, acknowledged: {EVENT.ACK.STATUS}.
+        - event_source: DISCOVERY
+          operation_mode: PROBLEM
+          subject: "*Discovery:* {DISCOVERY.DEVICE.STATUS} {DISCOVERY.DEVICE.IPADDRESS}"
+          message: |
+            *Discovery rule:* {DISCOVERY.RULE.NAME}
 
-          - event_source: TRIGGERS
-            operation_mode: UPDATE
-            subject: "🔄 *Updated problem:* {EVENT.NAME}"
-            message: |
-              👤 {USER.FULLNAME} {EVENT.UPDATE.ACTION} problem at {EVENT.UPDATE.DATE} {EVENT.UPDATE.TIME}.
-              📝 {EVENT.UPDATE.MESSAGE}
+            *Device IP:* {DISCOVERY.DEVICE.IPADDRESS}
+            *Device DNS:* {DISCOVERY.DEVICE.DNS}
+            *Device status:* {DISCOVERY.DEVICE.STATUS}
+            *Device uptime:* {DISCOVERY.DEVICE.UPTIME}
 
-              *Current problem status:* {EVENT.STATUS}, acknowledged: {EVENT.ACK.STATUS}.
-
-          - event_source: DISCOVERY
-            operation_mode: PROBLEM
-            subject: "🔍 Discovery: {DISCOVERY.DEVICE.STATUS} {DISCOVERY.DEVICE.IPADDRESS}"
-            message: |
-              📡 *Discovery rule:* {DISCOVERY.RULE.NAME}
-
-              🌐 *Device IP:* {DISCOVERY.DEVICE.IPADDRESS}
-              🌐 *Device DNS:* {DISCOVERY.DEVICE.DNS}
-              📶 *Device status:* {DISCOVERY.DEVICE.STATUS}
-              ⏳ *Device uptime:* {DISCOVERY.DEVICE.UPTIME}
-
-              🛠️ *Device service name:* {DISCOVERY.SERVICE.NAME}
-              🚪 *Device service port:* {DISCOVERY.SERVICE.PORT}
-              📶 *Device service status:* {DISCOVERY.SERVICE.STATUS}
-              ⏳ *Device service uptime:* {DISCOVERY.SERVICE.UPTIME}
-
-          - event_source: AUTOREGISTRATION
-            operation_mode: PROBLEM
-            subject: "📥 Autoregistration: {HOST.HOST}"
-            message: |
-              💻 *Host name:* {HOST.HOST}
-              🌐 *Host IP:* {HOST.IP}
-              🚪 *Agent port:* {HOST.PORT}
+            *Device service name:* {DISCOVERY.SERVICE.NAME}
+            *Device service port:* {DISCOVERY.SERVICE.PORT}
+            *Device service status:* {DISCOVERY.SERVICE.STATUS}
+            *Device service uptime:* {DISCOVERY.SERVICE.UPTIME}
+        - event_source: AUTOREGISTRATION
+          operation_mode: PROBLEM
+          subject: "Autoregistration: {HOST.HOST}"
+          message: |
+            *Host name:* {HOST.HOST}
+            *Host IP:* {HOST.IP}
+            *Agent port:* {HOST.PORT}

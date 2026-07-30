@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 #
-# Envia alertas do Zabbix com o gráfico do item para o WhatsApp via Evolution API.
+# Envia alertas do Zabbix com o gráfico do item para o WhatsApp via Evolution Go.
 #
 # Referência da API:
-#   https://docs.evolutionfoundation.com.br/evolution-api/send-media-message
-#   POST {url}/message/sendMedia/{instance}   header: apikey
+#   https://docs.evolutionfoundation.com.br/evolution-go/send-a-media-message
+#   POST {url}/send/media    header: apikey    body: {number, url, caption, ...}
+#   https://docs.evolutionfoundation.com.br/evolution-go/send-a-text-message
+#   POST {url}/send/text     header: apikey    body: {number, text, ...}
 #
-# Referência original:
-#   https://wiki.tiozaodolinux.com/Guide-for-Linux/Zabbix-Telegram-With-Graphic
-#
-# Uso recomendado: passe os segredos por variável de ambiente (veja ENV abaixo)
-# em vez de argumentos, pois argumentos são visíveis via `ps aux` para qualquer
-# usuário do host.
+# Diferenças em relação à Evolution API:
+#   - a instância NÃO vai no path; ela é identificada pelo token (apikey) usado;
+#   - o campo da mídia chama-se `url` (e não `media`) e o tipo, `type` (e não
+#     `mediatype`). Assim como na Evolution API, `url` aceita tanto uma URL
+#     quanto o conteúdo em base64 — este script envia o PNG em base64.
 #
 
 import base64
@@ -39,23 +40,33 @@ GRAPH_PROFILE_IDX = "web.item.graph.filter"
 HTTP_TIMEOUT = int(os.environ.get("ZBX_HTTP_TIMEOUT", "30"))
 SEND_DELAY = int(os.environ.get("WA_SEND_DELAY", "1200"))
 
+# 'base64' (padrão) envia o PNG codificado no campo `url`.
+# 'url' usa EVOGO_MEDIA_URL como URL pública do PNG, sem embutir a imagem.
+MEDIA_MODE = os.environ.get("EVOGO_MEDIA_MODE", "base64").strip().lower()
+MEDIA_URL = os.environ.get("EVOGO_MEDIA_URL", "").strip()
+
 USAGE = """\
-Usage: {prog} {{URLZBX}} {{USERZBX}} {{PWDZBX}} {{ITEMIDZBX}} {{URLAPI}} {{APIKEY}} {{INSTANCE}} {{TO}} {{SUBJECT}} {{MSG}}
+Usage: {prog} {{URLZBX}} {{USERZBX}} {{PWDZBX}} {{ITEMIDZBX}} {{URLAPI}} {{APIKEY}} {{TO}} {{SUBJECT}} {{MSG}}
+
+A instância do Evolution Go é determinada pelo token informado em APIKEY
+(token global ou o token específico da instância, obtido em GET /instance/all).
 
 Os segredos podem (e devem) vir do ambiente, deixando o argumento vazio (''):
-  ZBX_USER      usuário do Zabbix          (substitui USERZBX)
-  ZBX_PASSWORD  senha do Zabbix            (substitui PWDZBX)
-  EVO_APIKEY    apikey da Evolution API    (substitui APIKEY)
+  ZBX_USER      usuário do Zabbix         (substitui USERZBX)
+  ZBX_PASSWORD  senha do Zabbix           (substitui PWDZBX)
+  EVOGO_APIKEY  token do Evolution Go     (substitui APIKEY)
 
 Outras variáveis opcionais:
-  ZBX_VERIFY_TLS   'true' (padrão), 'false' ou caminho para o CA bundle
-  EVO_VERIFY_TLS   idem, para a chamada à Evolution API
-  ZBX_GRAPH_FROM   janela do gráfico (padrão: now-6h)
-  ZBX_HTTP_TIMEOUT timeout em segundos (padrão: 30)
+  ZBX_VERIFY_TLS    'true' (padrão), 'false' ou caminho para o CA bundle
+  EVOGO_VERIFY_TLS  idem, para a chamada ao Evolution Go
+  EVOGO_MEDIA_MODE  'base64' (padrão) ou 'url'
+  EVOGO_MEDIA_URL   URL pública do PNG, obrigatória quando MODE='url'
+  ZBX_GRAPH_FROM    janela do gráfico (padrão: now-6h)
+  ZBX_HTTP_TIMEOUT  timeout em segundos (padrão: 30)
 
 Example:
 ========
-{prog} https://zabbix.seudominio.com Admin zabbix 48061 https://api.seudominio.com KHKHKHGKGJ zabbixbot 550000000000 'Subject' 'Msg from to WhatsApp'
+{prog} https://zabbix.seudominio.com Admin zabbix 48061 https://go.seudominio.com KHKHKHGKGJ 550000000000 'Subject' 'Msg from to WhatsApp'
 """
 
 
@@ -83,7 +94,7 @@ def tls_option(env_name):
 
 
 def parse_arguments():
-    expected_args = 11
+    expected_args = 10
     if len(sys.argv) != expected_args:
         sys.stderr.write("Erro: número incorreto de argumentos fornecidos.\n\n")
         sys.stderr.write(USAGE.format(prog=sys.argv[0]))
@@ -95,11 +106,10 @@ def parse_arguments():
         "pwd_zbx": os.environ.get("ZBX_PASSWORD") or sys.argv[3],
         "item_id": sys.argv[4],
         "url_api": sys.argv[5].rstrip("/"),
-        "apikey": os.environ.get("EVO_APIKEY") or sys.argv[6],
-        "instance": sys.argv[7],
-        "to": sys.argv[8],
-        "subject": sys.argv[9],
-        "msg": sys.argv[10],
+        "apikey": os.environ.get("EVOGO_APIKEY") or sys.argv[6],
+        "to": sys.argv[7],
+        "subject": sys.argv[8],
+        "msg": sys.argv[9],
     }
 
     if not cfg["url_zbx"].startswith(("http://", "https://")):
@@ -113,15 +123,18 @@ def parse_arguments():
     if not cfg["url_api"].startswith(("http://", "https://")):
         fail("URLAPI deve começar com 'http://' ou 'https://'.")
     if not cfg["apikey"]:
-        fail("APIKEY não pode estar vazio (nem o argumento nem EVO_APIKEY).")
-    if not cfg["instance"]:
-        fail("INSTANCE não pode estar vazio.")
+        fail("APIKEY não pode estar vazio (nem o argumento nem EVOGO_APIKEY).")
     if not cfg["to"]:
         fail("TO não pode estar vazio.")
     if not cfg["subject"]:
         fail("SUBJECT não pode estar vazio.")
     if not cfg["msg"]:
         fail("MSG não pode estar vazio.")
+
+    if MEDIA_MODE not in ("base64", "url"):
+        fail("EVOGO_MEDIA_MODE deve ser 'base64' ou 'url'.")
+    if MEDIA_MODE == "url" and not MEDIA_URL:
+        fail("EVOGO_MEDIA_MODE='url' exige EVOGO_MEDIA_URL preenchida.")
 
     return cfg
 
@@ -187,44 +200,79 @@ def fetch_graph(cfg, verify):
     return response.content
 
 
-def send_media(cfg, image_bytes, verify):
-    """Envia a imagem com legenda via POST /message/sendMedia/{instance}."""
-    send_url = "{}/message/sendMedia/{}".format(cfg["url_api"], cfg["instance"])
-
-    payload = {
-        "number": cfg["to"],
-        "mediatype": "image",
-        "mimetype": "image/png",
-        "caption": "{}\n{}".format(cfg["subject"], cfg["msg"]),
-        "media": base64.b64encode(image_bytes).decode("utf-8"),
-        "fileName": "graph_zabbix_{}.png".format(cfg["item_id"]),
-        "delay": SEND_DELAY,
-    }
-
+def post_json(cfg, path, payload, verify):
+    """POST autenticado no Evolution Go. Devolve o objeto response."""
+    url = "{}{}".format(cfg["url_api"], path)
     headers = {"Content-Type": "application/json", "apikey": cfg["apikey"]}
 
     try:
-        response = requests.post(
-            send_url, json=payload, headers=headers, verify=verify, timeout=HTTP_TIMEOUT
+        return requests.post(
+            url, json=payload, headers=headers, verify=verify, timeout=HTTP_TIMEOUT
         )
     except requests.RequestException as exc:
-        fail("falha ao conectar na Evolution API: {}".format(exc))
+        fail("falha ao conectar no Evolution Go: {}".format(exc))
 
-    # A Evolution API responde 201 no envio e 200 em algumas versões.
+
+def send_text(cfg, verify):
+    """Fallback: envia somente o texto do alerta via POST /send/text."""
+    payload = {
+        "number": cfg["to"],
+        "text": "{}\n{}".format(cfg["subject"], cfg["msg"]),
+        "delay": SEND_DELAY,
+    }
+
+    response = post_json(cfg, "/send/text", payload, verify)
     if response.status_code not in (200, 201):
         fail(
-            "falha ao enviar mensagem e gráfico (HTTP {}): {}".format(
+            "falha ao enviar a mensagem de texto (HTTP {}): {}".format(
                 response.status_code, response.text[:500]
             )
         )
 
-    print("Mensagem e gráfico enviados com sucesso")
+    print("Mensagem enviada sem o gráfico")
+
+
+def send_media(cfg, image_bytes, verify):
+    """Envia a imagem com legenda via POST /send/media.
+
+    O campo `url` aceita uma URL ou o conteúdo em base64; por padrão embutimos
+    o PNG, ou usamos a URL pública configurada em EVOGO_MEDIA_URL.
+    """
+    if MEDIA_MODE == "url":
+        media_ref = MEDIA_URL
+    else:
+        media_ref = base64.b64encode(image_bytes).decode("utf-8")
+
+    payload = {
+        "number": cfg["to"],
+        "url": media_ref,
+        "type": "image",
+        "caption": "{}\n{}".format(cfg["subject"], cfg["msg"]),
+        "filename": "graph_zabbix_{}.png".format(cfg["item_id"]),
+        "delay": SEND_DELAY,
+    }
+
+    response = post_json(cfg, "/send/media", payload, verify)
+
+    if response.status_code in (200, 201):
+        print("Mensagem e gráfico enviados com sucesso")
+        return
+
+    # Se a mídia foi recusada, o alerta ainda precisa chegar: cai para texto.
+    sys.stderr.write(
+        "Aviso: falha ao enviar o gráfico (HTTP {}): {}\n"
+        "Reenviando apenas o texto do alerta.\n".format(
+            response.status_code, response.text[:500]
+        )
+    )
+    send_text(cfg, verify)
 
 
 def main():
     cfg = parse_arguments()
+    evogo_verify = tls_option("EVOGO_VERIFY_TLS")
     image_bytes = fetch_graph(cfg, tls_option("ZBX_VERIFY_TLS"))
-    send_media(cfg, image_bytes, tls_option("EVO_VERIFY_TLS"))
+    send_media(cfg, image_bytes, evogo_verify)
 
 
 if __name__ == "__main__":

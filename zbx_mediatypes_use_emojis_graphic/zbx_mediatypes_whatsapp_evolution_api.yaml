@@ -1,5 +1,5 @@
 zabbix_export:
-  version: '7.0'
+  version: '7.4'
   media_types:
     - name: 'WhatsApp (Evolution API) - Graphic'
       type: SCRIPT
