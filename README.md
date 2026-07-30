@@ -32,7 +32,7 @@ em `alertscripts/`.
 
 ## Requisitos
 
-- **Zabbix 7.4 ou superior** — os arquivos declaram `version: '7.4'` e o frontend
+- **Zabbix 7.0 ou superior** — os arquivos declaram `version: '7.0'` e o frontend
   recusa importar exports de versão superior à sua;
 - Python 3 e a biblioteca `requests` no servidor Zabbix (apenas para os media types
   do tipo `SCRIPT`);
@@ -214,8 +214,7 @@ Certifique-se de que estas configurações estejam aplicadas tanto no nível do 
 - zabbix-frontend: 7.0.
 - zabbix-agent 2: 7.0.
 
-> Os media types foram atualizados para `version: '7.4'` e, nessa forma, exigem
-> Zabbix 7.4 ou superior para importação.
+> Todos os media types declaram `version: '7.0'`, alinhados com as versões acima.
 
 
 # Contribuições
