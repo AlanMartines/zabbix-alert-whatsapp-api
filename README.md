@@ -49,6 +49,10 @@ desejado, de uma das três pastas.
 
 Copie o script correspondente para o diretório `AlertScriptsPath` do servidor
 Zabbix (por padrão `/usr/lib/zabbix/alertscripts/`):
+```bash
+chmod +x /usr/lib/zabbix/alertscripts/<alertscripts>.py
+chown zabbix:zabbix /usr/lib/zabbix/alertscripts/<alertscripts>.py
+````
 
 ```bash
 sudo install -o zabbix -g zabbix -m 0750 alertscripts/whatsapp-graph-uazapi.py /usr/lib/zabbix/alertscripts/
