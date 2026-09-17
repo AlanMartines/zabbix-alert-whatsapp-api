@@ -1,160 +1,172 @@
 #!/usr/bin/env python3
 #
-# Referência
-# https://www.youtube.com/watch?v=Ko8CJUqSqws
-# https://wiki.tiozaodolinux.com/Guide-for-Linux/Zabbix-Telegram-With-Graphic
+# Envia alertas do Zabbix com o gráfico do item para o WhatsApp via ConnectZap API.
 #
 
+import base64
 import os
 import sys
-import subprocess
 
-# Função para verificar e instalar dependências
-def check_dependencies():
-    try:
-        import requests
-    except ImportError:
-        print("A biblioteca 'requests' não está instalada. Instalando agora...")
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "requests"])
-        import requests
+try:
+    import requests
+except ImportError:
+    sys.stderr.write("Erro: biblioteca 'requests' não instalada. Execute: pip install requests\n")
+    sys.exit(1)
 
-# Verifica dependências antes de continuar
-check_dependencies()
+# Configurações de gráfico e requisição
+GRAPH_FROM = os.environ.get("ZBX_GRAPH_FROM", "now-6h")
+GRAPH_TO = os.environ.get("ZBX_GRAPH_TO", "now")
+GRAPH_WIDTH = os.environ.get("ZBX_GRAPH_WIDTH", "1024")
+GRAPH_HEIGHT = os.environ.get("ZBX_GRAPH_HEIGHT", "220")
+GRAPH_TYPE = os.environ.get("ZBX_GRAPH_TYPE", "0")
+GRAPH_PROFILE_IDX = "web.item.graph.filter"
 
-import requests
-import base64
+HTTP_TIMEOUT = int(os.environ.get("ZBX_HTTP_TIMEOUT", "20"))
 
-# Função para forçar o usuário a passar os parâmetros necessários
-def check_arguments():
-    expected_args = 10
-    if len(sys.argv) != expected_args:
-        print(f"Erro: Número incorreto de argumentos fornecidos.")
-        print(f"Usage: {sys.argv[0]} {{URLZBX}} {{USERZBX}} {{PWDZBX}} {{ITEMIDZBX}} {{URLAPI}} {{TOKEN}} {{TO}} {{SUBJECT}} {{MSG}}\n")
-        print(f"Example:\n{'='*8}")
-        print(f"{sys.argv[0]} https://zabbix.seudominio.com Admin zabbix 48061 https://api.seudominio.com KHKHKHGKGJ 550000000000 'Subject' 'Msg from to WhatsApp'")
-        print(f"\n")
-        sys.exit(1)
 
-    url_zbx = sys.argv[1]
-    user_zbx = sys.argv[2]
-    pwd_zbx = sys.argv[3]
-    item_id_zbx = sys.argv[4]
-    url_api = sys.argv[5]
-    token = sys.argv[6]
-    to = sys.argv[7]
-    subject = sys.argv[8]
-    msg = sys.argv[9]
+def log_err(msg):
+    sys.stderr.write(f"[ConnectZap] {msg}\n")
 
-    if not url_zbx.startswith("http://") and not url_zbx.startswith("https://"):
-        print("Erro: URLZBX deve começar com 'http://' ou 'https://'.")
-        sys.exit(1)
-    if not user_zbx:
-        print("Erro: USERZBX não pode estar vazio.")
-        sys.exit(1)
-    if not pwd_zbx:
-        print("Erro: PWDZBX não pode estar vazio.")
-        sys.exit(1)
-    if not item_id_zbx.isdigit():
-        print("Erro: ITEMIDZBX deve ser um número.")
-        sys.exit(1)
-    if not url_api.startswith("http://") and not url_api.startswith("https://"):
-        print("Erro: URLAPI deve começar com 'http://' ou 'https://'.")
-        sys.exit(1)
-    if not token:
-        print("Erro: TOKEN não pode estar vazio.")
-        sys.exit(1)
-    if not to.isdigit():
-        print("Erro: TO deve ser um número.")
-        sys.exit(1)
-    if not subject:
-        print("Erro: SUBJECT não pode estar vazio.")
-        sys.exit(1)
-    if not msg:
-        print("Erro: MSG não pode estar vazio.")
-        sys.exit(1)
 
-# Função principal
-def main():
-    check_arguments()
+def fail(msg):
+    log_err(f"FATAL: {msg}")
+    sys.exit(1)
 
-    # Parâmetros extras para o gráfico
-    _from = "now-6h"               						# Tempo inicial
-    _to = "now"                    						# Tempo final
-    _with = "1024"                 						# Largura do gráfico
-    _height = "220"                						# Altura do gráfico
-    _type = "0"                    						# 0=linha simples, 1=empilhado quando há mais de um parâmetro no mesmo gráfico
-    _profileIdx = "web.item.graph.filter" 		# Função do gráfico
 
-    # Leitura dos parâmetros obrigatórios
-    _ZABBIX_BASE = sys.argv[1]                # URLZBX: URL base do Zabbix
-    _ZABBIX_USER = sys.argv[2]                # USERXBX: usuário com permissão de leitura
-    _ZABBIX_PASSWORD = sys.argv[3]            # PWDZBX: senha do usuário
-    _ZABBIX_ITEM_ID = sys.argv[4]             # ITEMID: Ex: 48061 - Utilização de CPU do Zabbix Server (%)
-    _WA_API_URL = sys.argv[5]                 # URLAPI: API do WhatsApp para enviar imagens
-    _WA_TOKEN = sys.argv[6]                   # Token da API
-    _WA_TO = sys.argv[7]                      # Destinatário do WhatsApp
-    _WA_SUBJECT = sys.argv[8]                 # Assunto
-    _WA_MSG = sys.argv[9]                     # Mensagem a ser enviada no WhatsApp 
+def parse_arguments():
+    if len(sys.argv) != 10:
+        fail(f"Parâmetros incorretos. Recebidos {len(sys.argv)-1}, esperados 9.")
 
-    # Sessão do requests
+    raw_item_id = sys.argv[4].strip()
+    clean_item_id = raw_item_id if raw_item_id.isdigit() else None
+
+    cfg = {
+        "url_zbx": sys.argv[1].rstrip("/"),
+        "user_zbx": sys.argv[2],
+        "pwd_zbx": sys.argv[3],
+        "item_id": clean_item_id,
+        "url_api": sys.argv[5].rstrip("/"),
+        "token": sys.argv[6],
+        "to": sys.argv[7].strip(),
+        "subject": sys.argv[8],
+        "msg": sys.argv[9],
+    }
+
+    if not cfg["url_zbx"].startswith(("http://", "https://")):
+        fail("URLZBX deve começar com 'http://' ou 'https://'.")
+    if not cfg["user_zbx"] or not cfg["pwd_zbx"]:
+        fail("Credenciais do Zabbix não podem estar vazias.")
+    if not cfg["url_api"].startswith(("http://", "https://")):
+        fail("URLAPI deve começar com 'http://' ou 'https://'.")
+    if not cfg["token"]:
+        fail("TOKEN não pode estar vazio.")
+    if not cfg["to"]:
+        fail("Destinatário (TO) não pode estar vazio.")
+
+    return cfg
+
+
+def fetch_graph(cfg):
+    """Autentica na UI do Zabbix 7.x e extrai o PNG do gráfico."""
+    if not cfg["item_id"]:
+        return None
+
     session = requests.Session()
+    login_url = f"{cfg['url_zbx']}/index.php"
 
-    # URL do login
-    login_url = f'{_ZABBIX_BASE}/index.php'
+    try:
+        # GET inicial para carregar cookies de sessão do Zabbix 7.x
+        session.get(login_url, verify=False, timeout=HTTP_TIMEOUT)
 
-    # Dados do formulário de login
-    login_data = {
-        'name': _ZABBIX_USER,
-        'password': _ZABBIX_PASSWORD,
-        'enter': 'Sign in',
-        'autologin': 1,
-        'request': login_url
+        login_data = {
+            "name": cfg["user_zbx"],
+            "password": cfg["pwd_zbx"],
+            "enter": "Sign in",
+            "autologin": 1,
+            "request": "",
+        }
+        session.post(login_url, data=login_data, verify=False, timeout=HTTP_TIMEOUT)
+    except Exception as exc:
+        log_err(f"Falha de conexão com Zabbix: {exc}")
+        return None
+
+    if "zbx_session" not in session.cookies:
+        log_err("Falha na autenticação do Zabbix (cookie zbx_session ausente).")
+        return None
+
+    graph_url = (
+        f"{cfg['url_zbx']}/chart.php?from={GRAPH_FROM}&to={GRAPH_TO}"
+        f"&itemids[0]={cfg['item_id']}&type={GRAPH_TYPE}&profileIdx={GRAPH_PROFILE_IDX}"
+        f"&width={GRAPH_WIDTH}&height={GRAPH_HEIGHT}"
+    )
+
+    try:
+        res = session.get(graph_url, verify=False, timeout=HTTP_TIMEOUT)
+        if res.ok and res.content.startswith(b"\x89PNG"):
+            return res.content
+        log_err(f"chart.php não devolveu PNG válido (HTTP {res.status_code})")
+    except Exception as exc:
+        log_err(f"Erro ao obter PNG do item {cfg['item_id']}: {exc}")
+
+    return None
+
+
+def send_text(cfg):
+    """Fallback: envia mensagem de texto no grupo."""
+    url = f"{cfg['url_api']}/sistema/sendTextGrupo"
+    payload = {
+        "SessionName": cfg["token"],
+        "groupId": cfg["to"],
+        "text": f"{cfg['subject']}\n\n{cfg['msg']}",
     }
+    headers = {"Content-Type": "application/json"}
 
-    # Faz login
-    response = session.post(login_url, data=login_data, verify=False)
+    try:
+        res = requests.post(url, json=payload, headers=headers, verify=False, timeout=HTTP_TIMEOUT)
+        if res.status_code in (200, 201):
+            print("Mensagem de texto enviada com sucesso no grupo.")
+            return True
+        fail(f"Falha no envio de texto (HTTP {res.status_code}): {res.text[:300]}")
+    except Exception as exc:
+        fail(f"Erro ao conectar na ConnectZap: {exc}")
 
-    # Verifica se o login foi bem-sucedido
-    if 'Falha no login' in response.text:
-        print('Falha no login')
-        sys.exit(1)
 
-    # URL do gráfico específico
-    graph_url = f'{_ZABBIX_BASE}/chart.php?from={_from}&to={_to}&itemids[0]={_ZABBIX_ITEM_ID}&type={_type}&profileIdx={_profileIdx}&width={_with}&height={_height}'
-
-    # Faz a requisição do gráfico
-    graph_response = session.get(graph_url, verify=False)
-
-    # Verifica se a requisição foi bem-sucedida
-    if graph_response.status_code != 200:
-        print('Falha ao obter o gráfico')
-        sys.exit(1)
-
-    # Codifica a imagem em base64 diretamente da resposta
-    base64_image = base64.b64encode(graph_response.content).decode('utf-8')
-
-    # Prepara a mensagem para enviar via WhatsApp API
-    wa_msg = f"{_WA_SUBJECT}\n{_WA_MSG}"
-
-    # Envia a imagem via WhatsApp API
-    wa_send_url = f'{_WA_API_URL}/sistema/sendImageBase64Grupo'
-    data = {
-        'SessionName': _WA_TOKEN,
-        'groupId': _WA_TO,
-        'base64': base64_image,
-        'originalname': f'graph_zabbix_{_ZABBIX_ITEM_ID}.png',
-        'caption': wa_msg
+def send_media(cfg, image_bytes):
+    """Envia gráfico e legenda com fallback automático para texto."""
+    url = f"{cfg['url_api']}/sistema/sendImageBase64Grupo"
+    payload = {
+        "SessionName": cfg["token"],
+        "groupId": cfg["to"],
+        "base64": base64.b64encode(image_bytes).decode("utf-8"),
+        "originalname": f"graph_zabbix_{cfg['item_id']}.png",
+        "caption": f"{cfg['subject']}\n\n{cfg['msg']}",
     }
-    headers = {'Content-Type': 'application/json'}
+    headers = {"Content-Type": "application/json"}
 
-    response = requests.post(wa_send_url, json=data, headers=headers, verify=False)
+    try:
+        res = requests.post(url, json=payload, headers=headers, verify=False, timeout=HTTP_TIMEOUT)
+        if res.status_code in (200, 201):
+            print("Gráfico e mensagem enviados com sucesso no grupo.")
+            return True
+        log_err(f"Falha no envio de mídia (HTTP {res.status_code}). Acionando fallback para texto.")
+    except Exception as exc:
+        log_err(f"Erro na requisição da imagem: {exc}. Acionando fallback para texto.")
 
-    # Verifica se o envio foi bem-sucedido
-    if response.status_code == 200:
-        print('Mensagem e gráfico enviados com sucesso')
+    return send_text(cfg)
+
+
+def main():
+    cfg = parse_arguments()
+    image_bytes = None
+
+    if cfg["item_id"]:
+        image_bytes = fetch_graph(cfg)
+
+    if image_bytes:
+        send_media(cfg, image_bytes)
     else:
-        print('Falha ao enviar mensagem e gráfico')
+        send_text(cfg)
 
-# Executa a função principal
+
 if __name__ == "__main__":
     main()
