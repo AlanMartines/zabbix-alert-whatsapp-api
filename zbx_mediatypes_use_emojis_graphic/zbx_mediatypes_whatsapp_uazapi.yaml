@@ -26,59 +26,48 @@ zabbix_export:
       status: ENABLED
       attempts: '2'
       attempt_interval: '5s'
+      description: |
+        Clean Template - Zabbix Alerts via uazapiGO
+        Sends item graph with a compact, readable layout.
       message_templates:
         - event_source: TRIGGERS
           operation_mode: PROBLEM
-          subject: "❌ *Problem:* {EVENT.NAME}"
+          subject: "❌ *Problem:* {HOST.NAME}"
           message: |
-            🕒 *Problem started:* {EVENT.TIME} on {EVENT.DATE}
-            🚩 *Problem name:* {EVENT.NAME}
-            💻 *Host:* {HOST.NAME}
+            💻 *Host:* {HOST.NAME} ({HOST.CONN})
             🚨 *Severity:* {EVENT.SEVERITY}
-            🔍 *Operational data:* {EVENT.OPDATA}
-            🆔 *Original problem ID:* {EVENT.ID}
-            🔗 {TRIGGER.URL}
+            🚩 *Problem:* {EVENT.NAME}
+            📈 *Value:* {ITEM.VALUE1}
+            🕒 *Time:* {EVENT.TIME} ({EVENT.DATE})
 
         - event_source: TRIGGERS
           operation_mode: RECOVERY
-          subject: "✅ *Resolved:* {EVENT.DURATION}: {EVENT.NAME}"
+          subject: "✅ *Resolved:* {HOST.NAME}"
           message: |
-            ⏱️ *Problem resolved:* {EVENT.DURATION} at {EVENT.RECOVERY.TIME} on {EVENT.RECOVERY.DATE}
-            🚩 *Problem name:* {EVENT.NAME}
-            💻 *Host:* {HOST.NAME}
-            🚨 *Severity:* {EVENT.SEVERITY}
-            🆔 *Original problem ID:* {EVENT.ID}
-            🔗 {TRIGGER.URL}
+            💻 *Host:* {HOST.NAME} ({HOST.CONN})
+            🚩 *Problem:* {EVENT.NAME}
+            ⏱️ *Duration:* {EVENT.DURATION}
+            🕒 *Resolved:* {EVENT.RECOVERY.TIME} ({EVENT.RECOVERY.DATE})
 
         - event_source: TRIGGERS
           operation_mode: UPDATE
-          subject: "🔄 *Updated problem:* {EVENT.NAME}"
+          subject: "🔄 *Update:* {HOST.NAME}"
           message: |
-            👤 {USER.FULLNAME} {EVENT.UPDATE.ACTION} problem at {EVENT.UPDATE.DATE} {EVENT.UPDATE.TIME}.
-            📝 {EVENT.UPDATE.MESSAGE}
-
-            *Current problem status:* {EVENT.STATUS}, acknowledged: {EVENT.ACK.STATUS}.
+            👤 *User:* {USER.FULLNAME}
+            📝 *Message:* {EVENT.UPDATE.MESSAGE}
+            📌 *Status:* {EVENT.STATUS} ({EVENT.ACK.STATUS})
 
         - event_source: DISCOVERY
           operation_mode: PROBLEM
-          subject: "🔍 Discovery: {DISCOVERY.DEVICE.STATUS} {DISCOVERY.DEVICE.IPADDRESS}"
+          subject: "🔍 *Discovery:* {DISCOVERY.DEVICE.IPADDRESS}"
           message: |
-            📡 *Discovery rule:* {DISCOVERY.RULE.NAME}
-
-            🌐 *Device IP:* {DISCOVERY.DEVICE.IPADDRESS}
-            🌐 *Device DNS:* {DISCOVERY.DEVICE.DNS}
-            📶 *Device status:* {DISCOVERY.DEVICE.STATUS}
-            ⏳ *Device uptime:* {DISCOVERY.DEVICE.UPTIME}
-
-            🛠️ *Device service name:* {DISCOVERY.SERVICE.NAME}
-            🚪 *Device service port:* {DISCOVERY.SERVICE.PORT}
-            📶 *Device service status:* {DISCOVERY.SERVICE.STATUS}
-            ⏳ *Device service uptime:* {DISCOVERY.SERVICE.UPTIME}
+            🌐 *IP:* {DISCOVERY.DEVICE.IPADDRESS}
+            🛠️ *Service:* {DISCOVERY.SERVICE.NAME}:{DISCOVERY.SERVICE.PORT}
+            📶 *Status:* {DISCOVERY.DEVICE.STATUS}
 
         - event_source: AUTOREGISTRATION
           operation_mode: PROBLEM
-          subject: "📥 Autoregistration: {HOST.HOST}"
+          subject: "📥 *Autoregistration:* {HOST.HOST}"
           message: |
-            💻 *Host name:* {HOST.HOST}
-            🌐 *Host IP:* {HOST.IP}
-            🚪 *Agent port:* {HOST.PORT}
+            💻 *Host:* {HOST.HOST}
+            🌐 *IP:* {HOST.IP}
