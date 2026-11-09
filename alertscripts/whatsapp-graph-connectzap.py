@@ -219,14 +219,10 @@ def post_json(cfg, path, payload, verify):
 
 def send_text(cfg, verify):
     """Envia somente o texto do alerta no grupo (também usado como fallback)."""
-    text = build_text(cfg)
     payload = {
         "SessionName": cfg["token"],
         "groupId": cfg["to"],
-        # O webhook usa `msg`; versões anteriores deste script usavam `text`.
-        # Os dois são enviados para manter compatibilidade.
-        "msg": text,
-        "text": text,
+        "msg": build_text(cfg),
     }
     try:
         res = post_json(cfg, "/sistema/sendTextGrupo", payload, verify)
