@@ -1,14 +1,24 @@
 #!/usr/bin/env python3
 #
 # Envia alertas do Zabbix com o gráfico do item para o WhatsApp via uazapiGO.
-# Endpoint de mídia: POST {url}/send/media (header: token)
-# Endpoint de texto: POST {url}/send/text  (header: token)
+#
+# Referência da API (https://docs.uazapi.com/):
+#   POST {url}/send/media    header: token    body: {number, type, file, text, ...}
+#   POST {url}/send/text     header: token    body: {number, text, ...}
+#
+# A URL base inclui o subdomínio da conta (https://suaconta.uazapi.com) e a
+# instância é identificada pelo token.
+#
+# Uso:
+#   whatsapp-graph-uazapi.py URLZBX USERZBX PWDZBX ITEMIDZBX URLAPI TOKEN TO SUBJECT MSG
 #
 
 import base64
+import json
 import os
 import re
 import sys
+from urllib.parse import unquote
 
 try:
     import requests
@@ -16,7 +26,10 @@ except ImportError:
     sys.stderr.write("Erro: biblioteca 'requests' não encontrada. Execute: pip install requests\n")
     sys.exit(1)
 
-# Configurações do gráfico e requisição
+LOG_TAG = "Zabbix-uazapi"
+EXPECTED_ARGS = 9
+
+# Configurações do gráfico e da rede
 GRAPH_FROM = os.environ.get("ZBX_GRAPH_FROM", "now-6h")
 GRAPH_TO = os.environ.get("ZBX_GRAPH_TO", "now")
 GRAPH_WIDTH = os.environ.get("ZBX_GRAPH_WIDTH", "1024")
@@ -31,8 +44,12 @@ MEDIA_MODE = os.environ.get("UAZ_MEDIA_MODE", "base64").strip().lower()
 MEDIA_URL = os.environ.get("UAZ_MEDIA_URL", "").strip()
 
 
+# --------------------------------------------------------------------------- #
+# Utilitários comuns (mantidos iguais em todos os scripts de alertscripts/)
+# --------------------------------------------------------------------------- #
+
 def log_err(msg):
-    sys.stderr.write(f"[Zabbix-uazapi] {msg}\n")
+    sys.stderr.write(f"[{LOG_TAG}] {msg}\n")
 
 
 def fail(msg):
@@ -41,6 +58,7 @@ def fail(msg):
 
 
 def tls_option(env_name):
+    """Lê a opção de verificação TLS: true/false ou caminho para um CA bundle."""
     val = os.environ.get(env_name, "true").strip()
     if val.lower() in ("false", "0", "no"):
         return False
@@ -49,91 +67,154 @@ def tls_option(env_name):
     return val
 
 
-def parse_arguments():
-    if len(sys.argv) != 10:
-        fail(f"Parâmetros incorretos. Recebidos {len(sys.argv)-1}, esperados 9.")
+def clean_item_id(raw):
+    """Macro não resolvida ({ITEM.ID1}) ou vazio significa alerta sem gráfico."""
+    raw = raw.strip()
+    return raw if raw.isdigit() else None
 
-    raw_item_id = sys.argv[4].strip()
-    clean_item_id = raw_item_id if raw_item_id.isdigit() else None
 
-    # Sanitização: números puros se não for identificador de grupo (@g.us)
-    raw_to = sys.argv[7].strip()
-    to_dest = raw_to if "@" in raw_to else re.sub(r"\D", "", raw_to)
+def clean_recipient(raw):
+    """Mantém IDs de grupo (com '@'); para números, deixa somente os dígitos."""
+    raw = raw.strip()
+    return raw if "@" in raw else re.sub(r"\D", "", raw)
 
-    cfg = {
-        "url_zbx": sys.argv[1].rstrip("/"),
-        "user_zbx": os.environ.get("ZBX_USER") or sys.argv[2],
-        "pwd_zbx": os.environ.get("ZBX_PASSWORD") or sys.argv[3],
-        "item_id": clean_item_id,
-        "url_api": sys.argv[5].rstrip("/"),
-        "token": os.environ.get("UAZ_TOKEN") or sys.argv[6],
-        "to": to_dest,
-        "subject": sys.argv[8],
-        "msg": sys.argv[9],
-    }
 
-    if not cfg["url_zbx"].startswith(("http://", "https://")):
-        fail("URLZBX deve começar com 'http://' ou 'https://'.")
-    if not cfg["user_zbx"]:
-        fail("USERZBX não pode estar vazio.")
-    if not cfg["pwd_zbx"]:
-        fail("PWDZBX não pode estar vazio.")
-    if not cfg["url_api"].startswith(("http://", "https://")):
-        fail("URLAPI deve começar com 'http://' ou 'https://'.")
-    if not cfg["token"]:
-        fail("TOKEN não pode estar vazio.")
-    if not cfg["to"]:
-        fail("Destinatário (TO) não pode estar vazio.")
+def require_value(value, name, placeholder_check=True):
+    if not value:
+        fail(f"{name} não pode estar vazio.")
+    # A senha pode conter '<' e '>' legitimamente, por isso a checagem é opcional.
+    if placeholder_check and re.search(r"<[^>]+>", value):
+        fail(f"{name} ainda contém um marcador não substituído: {value}")
 
-    if MEDIA_MODE == "url" and not MEDIA_URL:
-        fail("UAZ_MEDIA_MODE='url' exige UAZ_MEDIA_URL preenchida.")
 
-    return cfg
+def require_http_url(value, name):
+    require_value(value, name)
+    if not value.startswith(("http://", "https://")):
+        fail(f"{name} deve começar com 'http://' ou 'https://'.")
+
+
+def zabbix_session_id(session):
+    """Extrai o sessionid do cookie zbx_session (base64 de um JSON)."""
+    raw = session.cookies.get("zbx_session")
+    if not raw:
+        return None
+    try:
+        data = json.loads(base64.b64decode(unquote(raw)))
+        return data.get("sessionid")
+    except (ValueError, TypeError):
+        return None
+
+
+def zabbix_logout(session, cfg, verify):
+    """Encerra a sessão aberta no frontend para não acumular sessões no banco."""
+    sid = zabbix_session_id(session)
+    if not sid:
+        return
+    payload = {"jsonrpc": "2.0", "method": "user.logout", "params": [], "id": 1}
+    headers = {"Content-Type": "application/json-rpc", "Authorization": f"Bearer {sid}"}
+    try:
+        res = session.post(
+            f"{cfg['url_zbx']}/api_jsonrpc.php",
+            json=payload, headers=headers, verify=verify, timeout=HTTP_TIMEOUT,
+        )
+        if "error" in res.json():
+            log_err(f"Logout no Zabbix não concluído: {res.text[:200]}")
+    except Exception as exc:
+        log_err(f"Falha ao encerrar a sessão no Zabbix: {exc}")
 
 
 def fetch_graph(cfg, verify):
-    """Autentica na UI do Zabbix 7 e obtém o gráfico."""
+    """Autentica no frontend do Zabbix 7, baixa o PNG do gráfico e faz logout."""
     if not cfg["item_id"]:
         return None
 
     session = requests.Session()
     login_url = f"{cfg['url_zbx']}/index.php"
+    login_data = {
+        "name": cfg["user_zbx"],
+        "password": cfg["pwd_zbx"],
+        "enter": "Sign in",
+        "autologin": 0,
+        "request": "",
+    }
 
     try:
-        # GET inicial para carregar cookies de sessão do Zabbix 7.x
+        # GET inicial para receber o cookie de sessão
         session.get(login_url, verify=verify, timeout=HTTP_TIMEOUT)
-
-        login_data = {
-            "name": cfg["user_zbx"],
-            "password": cfg["pwd_zbx"],
-            "enter": "Sign in",
-            "autologin": 1,
-            "request": "",
-        }
-        session.post(login_url, data=login_data, verify=verify, timeout=HTTP_TIMEOUT)
+        res = session.post(login_url, data=login_data, verify=verify, timeout=HTTP_TIMEOUT)
     except Exception as exc:
-        log_err(f"Falha na conexão com Zabbix: {exc}")
+        log_err(f"Falha de conexão com o Zabbix: {exc}")
         return None
 
-    if "zbx_session" not in session.cookies:
-        log_err("Não foi possível autenticar no Zabbix (cookie zbx_session ausente).")
+    # Em caso de sucesso o Zabbix redireciona para o dashboard; em caso de
+    # falha, devolve de novo o formulário de index.php.
+    if "zbx_session" not in session.cookies or res.url.split("?")[0].endswith("index.php"):
+        log_err("Não foi possível autenticar no Zabbix. Verifique usuário e senha.")
         return None
 
-    graph_url = (
-        f"{cfg['url_zbx']}/chart.php?from={GRAPH_FROM}&to={GRAPH_TO}"
-        f"&itemids[0]={cfg['item_id']}&type={GRAPH_TYPE}&profileIdx={GRAPH_PROFILE_IDX}"
-        f"&width={GRAPH_WIDTH}&height={GRAPH_HEIGHT}"
-    )
+    graph_url = f"{cfg['url_zbx']}/chart.php"
+    graph_params = {
+        "from": GRAPH_FROM,
+        "to": GRAPH_TO,
+        "itemids[0]": cfg["item_id"],
+        "type": GRAPH_TYPE,
+        "profileIdx": GRAPH_PROFILE_IDX,
+        "width": GRAPH_WIDTH,
+        "height": GRAPH_HEIGHT,
+    }
 
+    image = None
     try:
-        res = session.get(graph_url, verify=verify, timeout=HTTP_TIMEOUT)
+        res = session.get(graph_url, params=graph_params, verify=verify, timeout=HTTP_TIMEOUT)
         if res.ok and res.content.startswith(b"\x89PNG"):
-            return res.content
-        log_err(f"chart.php não devolveu PNG válido (HTTP {res.status_code})")
+            image = res.content
+        else:
+            log_err(f"chart.php não devolveu um PNG válido (HTTP {res.status_code}).")
     except Exception as exc:
-        log_err(f"Erro ao baixar gráfico do item {cfg['item_id']}: {exc}")
+        log_err(f"Erro ao baixar o gráfico do item {cfg['item_id']}: {exc}")
+    finally:
+        zabbix_logout(session, cfg, verify)
 
-    return None
+    return image
+
+
+def build_text(cfg):
+    return f"{cfg['subject']}\n\n{cfg['msg']}" if cfg["subject"] else cfg["msg"]
+
+
+# --------------------------------------------------------------------------- #
+# uazapiGO
+# --------------------------------------------------------------------------- #
+
+def parse_arguments():
+    if len(sys.argv) != EXPECTED_ARGS + 1:
+        fail(f"Parâmetros incorretos. Recebidos {len(sys.argv) - 1}, esperados {EXPECTED_ARGS}.")
+
+    cfg = {
+        "url_zbx": sys.argv[1].strip().rstrip("/"),
+        "user_zbx": os.environ.get("ZBX_USER") or sys.argv[2],
+        "pwd_zbx": os.environ.get("ZBX_PASSWORD") or sys.argv[3],
+        "item_id": clean_item_id(sys.argv[4]),
+        "url_api": sys.argv[5].strip().rstrip("/"),
+        "token": os.environ.get("UAZ_TOKEN") or sys.argv[6],
+        "to": clean_recipient(sys.argv[7]),
+        "subject": sys.argv[8],
+        "msg": sys.argv[9],
+    }
+
+    require_http_url(cfg["url_zbx"], "URLZBX")
+    require_value(cfg["user_zbx"], "USERZBX")
+    require_value(cfg["pwd_zbx"], "PWDZBX", placeholder_check=False)
+    require_http_url(cfg["url_api"], "URLAPI")
+    require_value(cfg["token"], "TOKEN")
+    require_value(cfg["to"], "Destinatário (TO)")
+
+    if MEDIA_MODE not in ("base64", "url"):
+        fail("UAZ_MEDIA_MODE deve ser 'base64' ou 'url'.")
+    if MEDIA_MODE == "url" and not MEDIA_URL:
+        fail("UAZ_MEDIA_MODE='url' exige UAZ_MEDIA_URL preenchida.")
+
+    return cfg
 
 
 def post_json(cfg, path, payload, verify):
@@ -143,63 +224,59 @@ def post_json(cfg, path, payload, verify):
 
 
 def send_text(cfg, verify):
-    """Fallback garantido: envia somente o texto do alerta via POST /send/text."""
+    """Envia somente o texto do alerta (também usado como fallback)."""
     payload = {
         "number": cfg["to"],
-        "text": f"{cfg['subject']}\n\n{cfg['msg']}",
+        "text": build_text(cfg),
         "delay": SEND_DELAY,
     }
     try:
         res = post_json(cfg, "/send/text", payload, verify)
-        if res.status_code in (200, 201):
-            print("Mensagem de texto enviada com sucesso.")
-            return True
-        fail(f"Falha ao enviar texto na uazapi (HTTP {res.status_code}): {res.text[:300]}")
     except Exception as exc:
-        fail(f"Erro de conexão com uazapi: {exc}")
+        fail(f"Erro de conexão com a uazapi: {exc}")
+    if not res.ok:
+        fail(f"Falha ao enviar texto na uazapi (HTTP {res.status_code}): {res.text[:300]}")
+    print("Mensagem de texto enviada com sucesso.")
 
 
 def send_media(cfg, image_bytes, verify):
-    """Envia gráfico e texto via POST /send/media com fallback automático para texto."""
+    """Envia o gráfico com o texto como legenda; se falhar, envia só o texto."""
     if MEDIA_MODE == "url":
         file_ref = MEDIA_URL
     else:
-        file_ref = base64.b64encode(image_bytes).decode("utf-8")
+        file_ref = base64.b64encode(image_bytes).decode("ascii")
 
     payload = {
         "number": cfg["to"],
         "type": "image",
         "file": file_ref,
-        "text": f"{cfg['subject']}\n\n{cfg['msg']}",
+        "text": build_text(cfg),
         "mimetype": "image/png",
         "delay": SEND_DELAY,
     }
 
     try:
         res = post_json(cfg, "/send/media", payload, verify)
-        if res.status_code in (200, 201):
+        if res.ok:
             print("Mensagem e gráfico enviados com sucesso.")
-            return True
-        log_err(f"uazapi recusou mídia (HTTP {res.status_code}). Acionando fallback para texto.")
+            return
+        log_err(f"uazapi recusou a mídia (HTTP {res.status_code}): {res.text[:300]}. Enviando só o texto.")
     except Exception as exc:
-        log_err(f"Erro ao enviar mídia: {exc}. Acionando fallback para texto.")
+        log_err(f"Erro ao enviar a mídia: {exc}. Enviando só o texto.")
 
-    return send_text(cfg, verify)
+    send_text(cfg, verify)
 
 
 def main():
     cfg = parse_arguments()
     zbx_verify = tls_option("ZBX_VERIFY_TLS")
-    uaz_verify = tls_option("UAZ_VERIFY_TLS")
+    api_verify = tls_option("UAZ_VERIFY_TLS")
 
-    image_bytes = None
-    if cfg["item_id"]:
-        image_bytes = fetch_graph(cfg, zbx_verify)
-
+    image_bytes = fetch_graph(cfg, zbx_verify)
     if image_bytes:
-        send_media(cfg, image_bytes, uaz_verify)
+        send_media(cfg, image_bytes, api_verify)
     else:
-        send_text(cfg, uaz_verify)
+        send_text(cfg, api_verify)
 
 
 if __name__ == "__main__":

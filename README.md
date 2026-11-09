@@ -24,11 +24,24 @@ zbx_mediatypes/                     Media types (webhook), mensagens sem emojis
 zbx_mediatypes_use_emojis/          Media types (webhook), mensagens com emojis
 zbx_mediatypes_use_emojis_graphic/  Media types (script), enviam o gráfico do item
 alertscripts/                       Scripts Python usados pelos media types do tipo SCRIPT
+tools/validate.py                   Validação estrutural (roda também no GitHub Actions)
 ```
 
-As três pastas contêm o mesmo conjunto de integrações; escolha **uma** conforme o
-formato de mensagem desejado. Os media types do tipo `SCRIPT` dependem dos arquivos
-em `alertscripts/`.
+Escolha **um** media type por provedor conforme o formato de mensagem desejado.
+As pastas de webhook têm o mesmo conjunto de integrações; a de gráfico cobre só
+uma parte:
+
+| Integração | Sem emojis | Com emojis | Com gráfico |
+|---|:-:|:-:|:-:|
+| ConnectZap (número) | ✔ | ✔ | — |
+| ConnectZap (grupo) | ✔ | ✔ | ✔ |
+| Whaticket (número) | ✔ | ✔ | — |
+| Whaticket (grupo) | ✔ | ✔ | — |
+| Evolution API | ✔ | ✔ | ✔ |
+| Evolution Go | ✔ | ✔ | ✔ |
+| uazapiGO | ✔ | ✔ | ✔ |
+
+Os media types do tipo `SCRIPT` (com gráfico) dependem dos arquivos em `alertscripts/`.
 
 ## Requisitos
 
@@ -47,17 +60,16 @@ desejado, de uma das três pastas.
 
 ### 2. Instalar os scripts de alerta (apenas para os media types "Graphic")
 
-Copie o script correspondente para o diretório `AlertScriptsPath` do servidor
-Zabbix (por padrão `/usr/lib/zabbix/alertscripts/`):
-```bash
-chmod +x /usr/lib/zabbix/alertscripts/<alertscripts>.py
-chown zabbix:zabbix /usr/lib/zabbix/alertscripts/<alertscripts>.py
-````
+Instale a biblioteca `requests` e copie o script correspondente para o diretório
+`AlertScriptsPath` do servidor Zabbix (por padrão `/usr/lib/zabbix/alertscripts/`),
+já com dono e permissão de execução:
 
 ```bash
-sudo install -o zabbix -g zabbix -m 0750 alertscripts/whatsapp-graph-uazapi.py /usr/lib/zabbix/alertscripts/
+# Debian/Ubuntu (ou: pip install requests)
 sudo apt install -y python3-requests
-pip install requests
+
+# Troque pelo script do seu provedor
+sudo install -o zabbix -g zabbix -m 0750 alertscripts/whatsapp-graph-uazapi.py /usr/lib/zabbix/alertscripts/
 ```
 
 Confirme o caminho configurado em `/etc/zabbix/zabbix_server.conf`:
@@ -73,10 +85,15 @@ marcadores. Os valores entre `<>` são obrigatórios:
 
 | Provedor | Parâmetros a preencher |
 |---|---|
-| ConnectZap / Whaticket | `Url`, `Authorization` |
+| ConnectZap | `Url`, `Authorization` (nome da sessão) |
+| Whaticket | `Url`, `Authorization` (`Bearer <token>`) |
 | Evolution API | `Url`, `ApiKey`, `Instance` |
 | Evolution Go | `Url`, `ApiKey` |
 | uazapiGO | `Url` (com o subdomínio da conta), `Token` |
+
+Todos os webhooks aceitam também o parâmetro opcional `HTTPProxy`
+(ex.: `http://proxy:3128`). O envio falha com uma mensagem clara se algum
+marcador `<...>` não tiver sido substituído.
 
 ### 4. Associar ao usuário e criar a ação
 
@@ -84,13 +101,20 @@ Em **Users → Users → Media**, adicione o media type ao usuário e informe o 
 de destino em *Send to* (formato internacional, somente dígitos — ex.: `5511999999999`).
 Depois crie a ação em **Alerts → Actions → Trigger actions**.
 
-Os media types do tipo `SCRIPT` vêm com `status: DISABLED`. Habilite-os apenas
+Os media types do tipo `SCRIPT` (com gráfico) vêm com `status: DISABLED`. Habilite-os apenas
 depois de instalar o script e testar o envio.
 
 ## Alertas com gráfico
 
 Os scripts em `alertscripts/` autenticam no frontend do Zabbix, baixam o PNG do
-gráfico do item (`chart.php`) e enviam a imagem com a mensagem como legenda.
+gráfico do item (`chart.php`), encerram a sessão (`user.logout` na API, para não
+acumular sessões no banco) e enviam a imagem com a mensagem como legenda. Se o
+gráfico não puder ser obtido ou a API recusar a mídia, enviam somente o texto.
+
+O usuário do Zabbix informado precisa ter permissão de leitura nos hosts cujos
+gráficos serão enviados. Prefira um usuário dedicado, com o mínimo de permissões.
+
+O script do ConnectZap envia **somente para grupos**: informe o ID do grupo em *Send to*.
 
 | Script | Argumentos |
 |---|---|
@@ -119,6 +143,7 @@ vazio (`''`):
 | Variável | Substitui |
 |---|---|
 | `ZBX_USER` / `ZBX_PASSWORD` | usuário e senha do Zabbix |
+| `CZ_TOKEN` | sessão da ConnectZap |
 | `EVO_APIKEY` | apikey da Evolution API |
 | `EVOGO_APIKEY` | token do Evolution Go |
 | `UAZ_TOKEN` | token da uazapi |
@@ -128,12 +153,23 @@ vazio (`''`):
 | Variável | Padrão | Descrição |
 |---|---|---|
 | `ZBX_VERIFY_TLS` | `true` | `true`, `false` ou caminho para o CA bundle |
-| `EVO_VERIFY_TLS` / `EVOGO_VERIFY_TLS` / `UAZ_VERIFY_TLS` | `true` | idem, para a chamada à API do WhatsApp |
-| `ZBX_GRAPH_FROM` | `now-6h` | janela do gráfico |
+| `CZ_VERIFY_TLS` / `EVO_VERIFY_TLS` / `EVOGO_VERIFY_TLS` / `UAZ_VERIFY_TLS` | `true` | idem, para a chamada à API do WhatsApp |
+| `ZBX_GRAPH_FROM` / `ZBX_GRAPH_TO` | `now-6h` / `now` | janela do gráfico |
 | `ZBX_GRAPH_WIDTH` / `ZBX_GRAPH_HEIGHT` | `1024` / `220` | dimensões em pixels |
-| `ZBX_HTTP_TIMEOUT` | `30` | timeout das requisições, em segundos |
+| `ZBX_GRAPH_TYPE` | `0` | tipo do gráfico do `chart.php` |
+| `ZBX_HTTP_TIMEOUT` | `20` | timeout de cada requisição, em segundos |
+| `WA_SEND_DELAY` | `500` | atraso de envio (ms) repassado à API; não usado pela ConnectZap |
 | `EVOGO_MEDIA_MODE` / `UAZ_MEDIA_MODE` | `base64` | `base64` embute a imagem; `url` usa uma URL pública |
 | `EVOGO_MEDIA_URL` / `UAZ_MEDIA_URL` | — | URL pública do PNG, obrigatória quando o modo é `url` |
+
+Como o script é executado pelo `zabbix_server`, as variáveis precisam estar no
+ambiente do serviço — por exemplo, com `systemctl edit zabbix-server`:
+
+```ini
+[Service]
+Environment=UAZ_TOKEN=seu_token
+Environment=ZBX_VERIFY_TLS=/etc/ssl/certs/ca-interno.pem
+```
 
 Se o seu Zabbix usa certificado autoassinado, aponte `ZBX_VERIFY_TLS` para o CA
 interno em vez de desativar a validação — desligá-la expõe as credenciais enviadas
@@ -210,6 +246,18 @@ Essas configurações garantem que a base de dados possa armazenar e processar c
 
 Certifique-se de que estas configurações estejam aplicadas tanto no nível do servidor de banco de dados quanto nas configurações específicas do banco de dados do Zabbix para evitar quaisquer problemas de compatibilidade ou exibição de caracteres.
 
+
+# Validação
+
+```bash
+pip install pyyaml
+python3 tools/validate.py
+```
+
+Confere se todos os media types abrem, se os `script_name` apontam para scripts
+existentes e executáveis, se o número de argumentos bate, se os webhooks têm o
+mesmo JavaScript nas pastas com e sem emojis e se os templates não têm negrito
+(`*`) sem fechar.
 
 # Testado com
 - mysql: 8.0.

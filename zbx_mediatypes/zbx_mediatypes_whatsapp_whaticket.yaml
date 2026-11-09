@@ -5,118 +5,114 @@ zabbix_export:
       type: WEBHOOK
       parameters:
         - name: Authorization
-          value: "Bearer <token_api>"
+          value: 'Bearer <token_api>'
+        - name: HTTPProxy
+          value: ''
         - name: Message
-          value: "{ALERT.MESSAGE}"
-        - name: ParseMode
-          value: ""
+          value: '{ALERT.MESSAGE}'
         - name: Subject
-          value: "{ALERT.SUBJECT}"
+          value: '{ALERT.SUBJECT}'
         - name: To
-          value: "{ALERT.SENDTO}"
+          value: '{ALERT.SENDTO}'
         - name: Url
-          value: "http://localhost:8080"
+          value: 'http://localhost:8080'
       attempts: "1"
       script: |
-        var WhatsApp = {
-            baseurl: null,
-            Authorization: null,
-            to: null,
-            message: null,
-            proxy: null,
-            parse_mode: null,
+        // Whaticket - POST {Url}/api/messages/send
+        // https://github.com/AlanMartines/whaticket_baileys
+        //
+        // Authorization: 'Bearer <token>' gerado nas configuracoes do Whaticket.
+        var TAG = '[Whaticket Webhook]';
 
-            escapeMarkup: function (str, mode) {
-                switch (mode) {
-                    case 'markdown':
-                        return str.replace(/([_*\[`])/g, '\\$&');
+        function requireParam(params, name) {
+            var value = params[name];
 
-                    case 'markdownv2':
-                        return str.replace(/([_*\[\]()~`>#+\-=|{}.!])/g, '\\$&');
+            if (typeof value !== 'string' || value.trim() === '') {
+                throw 'Parameter "' + name + '" is missing or empty';
+            }
+            if (/<[^>]+>/.test(value)) {
+                throw 'Parameter "' + name + '" still has a placeholder: ' + value;
+            }
 
-                    case 'html':
-                        return str.replace(/<(\s|[^a-z\/])/g, '&lt;$1');
+            return value.trim();
+        }
 
-                    default:
-                        return str;
-                }
-            },
+        function buildRequest(params, message) {
+            return {
+                path: '/api/messages/send',
+                headers: ['Authorization: ' + params.Authorization],
+                body: { number: params.To, body: message },
+                secrets: []
+            };
+        }
 
-            sendMessage: function () {
-                var params = {
-                        "number": WhatsApp.to,
-                        "body": WhatsApp.message
-                },
-                data,
+        function send(baseurl, proxy, req) {
+            var request = new HttpRequest(),
+                url = baseurl + req.path,
+                logged = {},
                 response,
-                request = new HttpRequest(),
-                url = WhatsApp.baseurl + '/api/messages/send';
+                status,
+                key,
+                i;
 
-                if (WhatsApp.parse_mode !== null) {
-                    params['parse_mode'] = WhatsApp.parse_mode;
-                }
-
-                if (WhatsApp.proxy) {
-                    request.setProxy(WhatsApp.proxy);
-                }
-
-                request.addHeader('Content-Type: application/json');
-                request.addHeader('Authorization: ' + WhatsApp.Authorization);
-                data = JSON.stringify(params);
-
-                // Remove replace() function if you want to see the exposed token in the log file.
-                Zabbix.log(4, '[WhatsApp Webhook] URL: ' + url);
-                Zabbix.log(4, '[WhatsApp Webhook] params: ' + data);
-                response = request.post(url, data);
-                Zabbix.log(4, '[WhatsApp Webhook] HTTP code: ' + request.getStatus());
-
-                if (request.getStatus() == 200 || request.getStatus() == 201 || request.getStatus() == 202) {
-                    // we did it. lets just exit for now.
-                    Zabbix.log(4, '[WhatsApp Webhook] request sent successfully');
-                    return;
-                } else {
-                    throw 'Unknown error. Check debug log for more information.';
+            // Copia do corpo para o log, sem segredos.
+            for (key in req.body) {
+                if (req.body.hasOwnProperty(key)) {
+                    logged[key] = (req.secrets.indexOf(key) !== -1) ? '***' : req.body[key];
                 }
             }
-        };
+
+            if (proxy) {
+                request.setProxy(proxy);
+            }
+
+            request.addHeader('Content-Type: application/json');
+            for (i = 0; i < req.headers.length; i++) {
+                request.addHeader(req.headers[i]);
+            }
+
+            Zabbix.log(4, TAG + ' URL: ' + url);
+            Zabbix.log(4, TAG + ' params: ' + JSON.stringify(logged));
+
+            response = request.post(url, JSON.stringify(req.body));
+            status = request.getStatus();
+
+            Zabbix.log(4, TAG + ' HTTP code: ' + status);
+            Zabbix.log(4, TAG + ' response: ' + response);
+
+            if (status < 200 || status >= 300) {
+                throw 'HTTP ' + status + ': ' + String(response).substring(0, 300);
+            }
+        }
 
         try {
-            var params = JSON.parse(value);
+            var params = JSON.parse(value),
+                subject = (typeof params.Subject === 'string') ? params.Subject : '',
+                body = (typeof params.Message === 'string') ? params.Message : '',
+                message,
+                baseurl;
 
-            if (typeof params.Url === 'undefined') {
-                throw 'Incorrect value is given for parameter "Url": parameter is missing';
+            params.Url = requireParam(params, 'Url');
+            params.Authorization = requireParam(params, 'Authorization');
+            params.To = requireParam(params, 'To');
+
+            if (!/^https?:\/\//i.test(params.Url)) {
+                throw 'Parameter "Url" must start with http:// or https://';
             }
 
-            if (typeof params.Authorization === 'undefined') {
-                throw 'Incorrect value is given for parameter "Authorization": parameter is missing';
+            baseurl = params.Url.replace(/\/+$/, '');
+            message = (subject !== '') ? subject + '\n' + body : body;
+
+            if (message === '') {
+                throw 'Subject and Message are both empty';
             }
 
-            WhatsApp.baseurl = params.Url;
-            WhatsApp.Authorization = params.Authorization;
-
-            if (params.HTTPProxy) {
-                WhatsApp.proxy = params.HTTPProxy;
-            } 
-
-            params.ParseMode = params.ParseMode.toLowerCase();
-            
-            if (['markdown', 'html', 'markdownv2'].indexOf(params.ParseMode) !== -1) {
-                WhatsApp.parse_mode = params.ParseMode;
-            }
-
-            WhatsApp.to = params.To;
-            WhatsApp.message = params.Subject + '\n' + params.Message;
-
-            if (['markdown', 'html', 'markdownv2'].indexOf(params.ParseMode) !== -1) {
-                WhatsApp.message = WhatsApp.escapeMarkup(WhatsApp.message, params.ParseMode);
-            }
-
-            WhatsApp.sendMessage();
+            send(baseurl, params.HTTPProxy, buildRequest(params, message));
 
             return 'OK';
         }
         catch (error) {
-            Zabbix.log(4, '[WhatsApp Webhook] notification failed: ' + error);
+            Zabbix.log(3, TAG + ' notification failed: ' + error);
             throw 'Sending failed: ' + error + '.';
         }
       timeout: 10s
@@ -197,10 +193,10 @@ zabbix_export:
           subject: "*Resolved:* {EVENT.DURATION}: {EVENT.NAME}"
           message: |
             *Problem resolved:* {EVENT.DURATION} at {EVENT.RECOVERY.TIME} on {EVENT.RECOVERY.DATE}
-            *Problem name: {EVENT.NAME}
+            *Problem name:* {EVENT.NAME}
             *Host:* {HOST.NAME}
             *Severity:* {EVENT.SEVERITY}
-            *Original problem ID*: {EVENT.ID}
+            *Original problem ID:* {EVENT.ID}
             {TRIGGER.URL}
         - event_source: TRIGGERS
           operation_mode: UPDATE

@@ -5,13 +5,13 @@ zabbix_export:
       type: WEBHOOK
       parameters:
         - name: ApiKey
-          value: <api_key>
+          value: '<api_key>'
+        - name: HTTPProxy
+          value: ''
         - name: Instance
-          value: zabbixbot
+          value: 'zabbixbot'
         - name: Message
           value: '{ALERT.MESSAGE}'
-        - name: ParseMode
-          value: ""
         - name: Subject
           value: '{ALERT.SUBJECT}'
         - name: To
@@ -20,115 +20,100 @@ zabbix_export:
           value: 'http://localhost:8080'
       attempts: '1'
       script: |
-        var WhatsApp = {
-            baseurl: null,
-            instance: null,
-            apikey: null,
-            to: null,
-            message: null,
-            proxy: null,
-            parse_mode: null,
+        // Evolution API v2 - POST {Url}/message/sendText/{Instance}
+        // https://doc.evolution-api.com/v2/pt/get-started/introduction
+        var TAG = '[Evolution API Webhook]';
 
-            escapeMarkup: function (str, mode) {
-                switch (mode) {
-                    case 'markdown':
-                        return str.replace(/([_*\\[`])/g, '\\$&');
-                    case 'markdownv2':
-                        return str.replace(/([_*\\[\\]()~`>#+\\-=|{}.!])/g, '\\$&');
-                    case 'html':
-                        return str.replace(/<(\\s|[^a-z\\/])/g, '&lt;$1');
-                    default:
-                        return str;
-                }
-            },
+        function requireParam(params, name) {
+            var value = params[name];
 
-            sendMessage: function () {
-                var params = {
-                    "number": WhatsApp.to,
-                    "delay": 1200,
-                    "text": WhatsApp.message
-                };
-
-                var request = new HttpRequest(),
-                    url = WhatsApp.baseurl + '/message/sendText/' + WhatsApp.instance,
-                    data = JSON.stringify(params),
-                    status,
-                    response;
-
-                if (WhatsApp.proxy) {
-                    request.setProxy(WhatsApp.proxy);
-                }
-
-                request.addHeader('Content-Type: application/json');
-                request.addHeader('apikey: ' + WhatsApp.apikey);
-
-                Zabbix.log(4, '[WhatsApp Webhook] URL: ' + url);
-                Zabbix.log(4, '[WhatsApp Webhook] params: ' + data);
-
-                response = request.post(url, data);
-                status = request.getStatus();
-
-                Zabbix.log(4, '[WhatsApp Webhook] HTTP code: ' + status);
-                Zabbix.log(4, '[WhatsApp Webhook] response: ' + response);
-
-                // A Evolution API responde 201 no envio e 200 em algumas versões.
-                if (status === 200 || status === 201) {
-                    Zabbix.log(4, '[WhatsApp Webhook] request sent successfully');
-                    return;
-                }
-
-                throw 'HTTP ' + status + ': ' + response;
+            if (typeof value !== 'string' || value.trim() === '') {
+                throw 'Parameter "' + name + '" is missing or empty';
             }
-        };
+            if (/<[^>]+>/.test(value)) {
+                throw 'Parameter "' + name + '" still has a placeholder: ' + value;
+            }
+
+            return value.trim();
+        }
+
+        function buildRequest(params, message) {
+            return {
+                path: '/message/sendText/' + encodeURIComponent(params.Instance),
+                headers: ['apikey: ' + params.ApiKey],
+                body: { number: params.To, text: message, delay: 1200 },
+                secrets: []
+            };
+        }
+
+        function send(baseurl, proxy, req) {
+            var request = new HttpRequest(),
+                url = baseurl + req.path,
+                logged = {},
+                response,
+                status,
+                key,
+                i;
+
+            // Copia do corpo para o log, sem segredos.
+            for (key in req.body) {
+                if (req.body.hasOwnProperty(key)) {
+                    logged[key] = (req.secrets.indexOf(key) !== -1) ? '***' : req.body[key];
+                }
+            }
+
+            if (proxy) {
+                request.setProxy(proxy);
+            }
+
+            request.addHeader('Content-Type: application/json');
+            for (i = 0; i < req.headers.length; i++) {
+                request.addHeader(req.headers[i]);
+            }
+
+            Zabbix.log(4, TAG + ' URL: ' + url);
+            Zabbix.log(4, TAG + ' params: ' + JSON.stringify(logged));
+
+            response = request.post(url, JSON.stringify(req.body));
+            status = request.getStatus();
+
+            Zabbix.log(4, TAG + ' HTTP code: ' + status);
+            Zabbix.log(4, TAG + ' response: ' + response);
+
+            if (status < 200 || status >= 300) {
+                throw 'HTTP ' + status + ': ' + String(response).substring(0, 300);
+            }
+        }
 
         try {
-            var params = JSON.parse(value);
+            var params = JSON.parse(value),
+                subject = (typeof params.Subject === 'string') ? params.Subject : '',
+                body = (typeof params.Message === 'string') ? params.Message : '',
+                message,
+                baseurl;
 
-            if (typeof params.Url === 'undefined') {
-                throw 'Incorrect value is given for parameter "Url": parameter is missing';
-            }
-            
-            if (typeof params.Instance === 'undefined') {
-                throw 'Incorrect value is given for parameter "Instance": parameter is missing';
-            }
-            
-            if (typeof params.ApiKey === 'undefined') {
-                throw 'Incorrect value is given for parameter "ApiKey": parameter is missing';
-            }
+            params.Url = requireParam(params, 'Url');
+            params.ApiKey = requireParam(params, 'ApiKey');
+            params.Instance = requireParam(params, 'Instance');
+            params.To = requireParam(params, 'To');
 
-            if (typeof params.To === 'undefined' || params.To === '') {
-                throw 'Incorrect value is given for parameter "To": parameter is missing';
+            if (!/^https?:\/\//i.test(params.Url)) {
+                throw 'Parameter "Url" must start with http:// or https://';
             }
 
-            WhatsApp.instance = params.Instance;
-            WhatsApp.baseurl = params.Url;
-            WhatsApp.apikey = params.ApiKey;
+            baseurl = params.Url.replace(/\/+$/, '');
+            message = (subject !== '') ? subject + '\n' + body : body;
 
-            if (params.HTTPProxy) {
-                WhatsApp.proxy = params.HTTPProxy;
-            } 
-
-            params.ParseMode = (typeof params.ParseMode === 'string')
-                ? params.ParseMode.toLowerCase()
-                : '';
-
-            if (['markdown', 'html', 'markdownv2'].indexOf(params.ParseMode) !== -1) {
-                WhatsApp.parse_mode = params.ParseMode;
+            if (message === '') {
+                throw 'Subject and Message are both empty';
             }
 
-            WhatsApp.to = params.To;
-            WhatsApp.message = params.Subject + '\n' + params.Message;
-
-            if (['markdown', 'html', 'markdownv2'].indexOf(params.ParseMode) !== -1) {
-                WhatsApp.message = WhatsApp.escapeMarkup(WhatsApp.message, params.ParseMode);
-            }
-
-            WhatsApp.sendMessage();
+            send(baseurl, params.HTTPProxy, buildRequest(params, message));
 
             return 'OK';
         }
         catch (error) {
-            Zabbix.log(4, '[WhatsApp Webhook] notification failed: ' + error);
+            Zabbix.log(3, TAG + ' notification failed: ' + error);
             throw 'Sending failed: ' + error + '.';
         }
       timeout: 10s
@@ -209,10 +194,10 @@ zabbix_export:
           subject: "*Resolved:* {EVENT.DURATION}: {EVENT.NAME}"
           message: |
             *Problem resolved:* {EVENT.DURATION} at {EVENT.RECOVERY.TIME} on {EVENT.RECOVERY.DATE}
-            *Problem name: {EVENT.NAME}
+            *Problem name:* {EVENT.NAME}
             *Host:* {HOST.NAME}
             *Severity:* {EVENT.SEVERITY}
-            *Original problem ID*: {EVENT.ID}
+            *Original problem ID:* {EVENT.ID}
             {TRIGGER.URL}
         - event_source: TRIGGERS
           operation_mode: UPDATE

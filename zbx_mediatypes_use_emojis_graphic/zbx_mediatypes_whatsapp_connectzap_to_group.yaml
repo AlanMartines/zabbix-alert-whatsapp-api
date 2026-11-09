@@ -3,7 +3,7 @@ zabbix_export:
   media_types:
     - name: 'WhatsApp ConnectZap API - To Group Graphic'
       type: SCRIPT
-      script_name: whatsapp-graph.py
+      script_name: whatsapp-graph-connectzap.py
       parameters:
         - sortorder: '0'
           value: '<url_zabbix>'
@@ -23,7 +23,7 @@ zabbix_export:
           value: '{ALERT.SUBJECT}'
         - sortorder: '8'
           value: '{ALERT.MESSAGE}'
-      status: ENABLED
+      status: DISABLED
       attempts: '2'
       attempt_interval: '5s'
       description: |

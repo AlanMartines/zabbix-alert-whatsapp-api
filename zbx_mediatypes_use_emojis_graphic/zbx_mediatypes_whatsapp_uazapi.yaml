@@ -23,7 +23,7 @@ zabbix_export:
           value: '{ALERT.SUBJECT}'
         - sortorder: '8'
           value: '{ALERT.MESSAGE}'
-      status: ENABLED
+      status: DISABLED
       attempts: '2'
       attempt_interval: '5s'
       description: |

@@ -1,3 +1,7 @@
-# Custon
+# Python
+__pycache__/
+*.py[cod]
+
+# Arquivos locais
 .claude
 CLAUDE.md

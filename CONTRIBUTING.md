@@ -19,13 +19,15 @@
 <h2>3. Estilo de Código</h2>
 <p>Por favor, certifique-se de que seu código adere aos nossos padrões de codificação. Isso garante consistência em todo o código e ajuda na legibilidade do mesmo.</p>
 
-<h2>4. Testes</h2>
-<p>Antes de enviar seu pull request, certifique-se de que todos os testes passem. Se você estiver adicionando uma nova funcionalidade, escreva testes para ela também.</p>
+<h2>4. Validação</h2>
+<p>Antes de enviar seu pull request, rode a validação do repositório (requer <code>pip install pyyaml</code>; o Node.js, se instalado, também verifica a sintaxe dos webhooks):</p>
+<pre><code>python3 tools/validate.py</code></pre>
+<p>A mesma validação roda automaticamente no GitHub Actions. Ao alterar o JavaScript de um webhook, aplique a mesma mudança nas pastas <code>zbx_mediatypes/</code> e <code>zbx_mediatypes_use_emojis/</code>: a validação exige que sejam idênticos.</p>
 
 <h2>5. Documentação</h2>
 <p>Se você estiver adicionando ou alterando funcionalidades, atualize a documentação de acordo.</p>
 
 <h3>Dúvidas?</h3>
-<p>Se você tiver alguma dúvida ou precisar de mais orientações, não hesite em <a href="https://github.com/AlanMartines/zabbix-docker-compose/issues">abrir uma issue</a>.</p>
+<p>Se você tiver alguma dúvida ou precisar de mais orientações, não hesite em <a href="https://github.com/AlanMartines/zabbix-alert-whatsapp-api/issues">abrir uma issue</a>.</p>
 
 <p>Obrigado por suas contribuições!</p>
