@@ -1,0 +1,276 @@
+zabbix_export:
+  version: '7.0'
+  media_types:
+    - name: 'Telegram Bot'
+      type: WEBHOOK
+      parameters:
+        - name: HTTPProxy
+          value: ''
+        - name: Message
+          value: '{ALERT.MESSAGE}'
+        - name: ParseMode
+          value: 'HTML'
+        - name: Subject
+          value: '{ALERT.SUBJECT}'
+        - name: To
+          value: '{ALERT.SENDTO}'
+        - name: Token
+          value: '<bot_token>'
+        - name: Url
+          value: 'https://api.telegram.org'
+      attempts: '3'
+      attempt_interval: '10s'
+      script: |
+        // Telegram Bot API - POST {Url}/bot{Token}/sendMessage
+        // https://core.telegram.org/bots/api#sendmessage
+        //
+        // Send to: chat_id do usuario ou grupo (ex.: -1001234567890), @canal ou,
+        // para um topico de grupo forum, chat_id:thread_id (ex.: -1001234567890:42).
+        // ParseMode: HTML (padrao) converte o *negrito* dos templates em <b>;
+        // vazio envia texto puro. Os valores das macros sao escapados antes.
+        var TAG = '[Telegram Webhook]',
+            TEXT_LIMIT = 4096;
+
+        function requireParam(params, name) {
+            var value = params[name];
+
+            if (typeof value !== 'string' || value.trim() === '') {
+                throw 'Parameter "' + name + '" is missing or empty';
+            }
+            if (/<[^>]+>/.test(value)) {
+                throw 'Parameter "' + name + '" still has a placeholder: ' + value;
+            }
+
+            return value.trim();
+        }
+
+        function toHtml(text) {
+            return text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/\*([^*\n]+)\*/g, '<b>$1</b>');
+        }
+
+        function toPlain(text) {
+            return text.replace(/\*([^*\n]+)\*/g, '$1');
+        }
+
+        function truncate(text, limit) {
+            return (text.length > limit) ? text.substring(0, limit - 1) + '…' : text;
+        }
+
+        function parseRecipient(to) {
+            var match = /^(-?\d+|@[A-Za-z0-9_]{5,}):(\d+)$/.exec(to);
+
+            if (match) {
+                return { chat_id: match[1], message_thread_id: parseInt(match[2], 10) };
+            }
+            return { chat_id: to };
+        }
+
+        function post(url, token, proxy, body) {
+            var request = new HttpRequest(),
+                response,
+                status;
+
+            if (proxy) {
+                request.setProxy(proxy);
+            }
+
+            request.addHeader('Content-Type: application/json');
+
+            // O token faz parte da URL: nunca registra-lo no log.
+            Zabbix.log(4, TAG + ' URL: ' + url.split(token).join('***'));
+            Zabbix.log(4, TAG + ' params: ' + JSON.stringify(body));
+
+            response = request.post(url, JSON.stringify(body));
+            status = request.getStatus();
+
+            Zabbix.log(4, TAG + ' HTTP code: ' + status);
+            Zabbix.log(4, TAG + ' response: ' + response);
+
+            return { status: status, response: String(response) };
+        }
+
+        try {
+            var params = JSON.parse(value),
+                subject = (typeof params.Subject === 'string') ? params.Subject : '',
+                body = (typeof params.Message === 'string') ? params.Message : '',
+                parseMode = (typeof params.ParseMode === 'string') ? params.ParseMode.trim().toUpperCase() : '',
+                message,
+                payload,
+                url,
+                result;
+
+            params.Url = requireParam(params, 'Url');
+            params.Token = requireParam(params, 'Token');
+            params.To = requireParam(params, 'To');
+
+            if (!/^https?:\/\//i.test(params.Url)) {
+                throw 'Parameter "Url" must start with http:// or https://';
+            }
+            if (parseMode !== '' && parseMode !== 'HTML') {
+                throw 'Parameter "ParseMode" must be HTML or empty';
+            }
+
+            message = (subject !== '') ? subject + '\n' + body : body;
+            if (message === '') {
+                throw 'Subject and Message are both empty';
+            }
+            message = truncate(message, TEXT_LIMIT);
+
+            url = params.Url.replace(/\/+$/, '') + '/bot' + params.Token + '/sendMessage';
+            payload = parseRecipient(params.To);
+            payload.link_preview_options = { is_disabled: true };
+
+            if (parseMode === 'HTML') {
+                payload.text = toHtml(message);
+                payload.parse_mode = 'HTML';
+            }
+            else {
+                payload.text = toPlain(message);
+            }
+
+            result = post(url, params.Token, params.HTTPProxy, payload);
+
+            // Formatacao recusada: reenvia como texto puro em vez de perder o alerta.
+            if (result.status === 400 && result.response.indexOf("can't parse entities") !== -1) {
+                Zabbix.log(3, TAG + ' formatting rejected, resending as plain text');
+                delete payload.parse_mode;
+                payload.text = toPlain(message);
+                result = post(url, params.Token, params.HTTPProxy, payload);
+            }
+
+            if (result.status < 200 || result.status >= 300) {
+                throw 'HTTP ' + result.status + ': ' + result.response.substring(0, 300);
+            }
+
+            return 'OK';
+        }
+        catch (error) {
+            error = String(error);
+            if (params && typeof params.Token === 'string' && params.Token !== '' && !/<[^>]+>/.test(params.Token)) {
+                error = error.split(params.Token).join('***');
+            }
+            Zabbix.log(3, TAG + ' notification failed: ' + error);
+            throw 'Sending failed: ' + error + '.';
+        }
+      timeout: 10s
+      description: |
+        Template de Alertas do Zabbix - Telegram
+
+        Crie o bot com o @BotFather e informe o token em Token.
+        Send to: chat_id do usuario ou grupo, @canal ou chat_id:thread_id
+        (topico de grupo forum). Endpoint: POST {Url}/bot{Token}/sendMessage
+        ParseMode: HTML (padrao) ou vazio para texto puro.
+        
+        Alertas de Problemas (Triggers)
+           Fonte do Evento: TRIGGERS
+           Modo de Operação: PROBLEM
+           Assunto: "Problem: {EVENT.NAME}"
+           Mensagem:
+             Início do problema às `{EVENT.TIME}` em `{EVENT.DATE}`
+             Nome do problema: `{EVENT.NAME}`
+             Host: `{HOST.NAME}`
+             Severidade: `{EVENT.SEVERITY}`
+             Dados operacionais: `{EVENT.OPDATA}`
+             ID original do problema: `{EVENT.ID}`
+             URL do Trigger: `{TRIGGER.URL}`
+        
+        Alertas de Recuperação (Triggers)
+           Fonte do Evento: TRIGGERS
+           Modo de Operação: RECOVERY
+           Assunto: "Resolved in {EVENT.DURATION}: {EVENT.NAME}"
+           Mensagem:
+             Problema resolvido em `{EVENT.DURATION}` às `{EVENT.RECOVERY.TIME}` em `{EVENT.RECOVERY.DATE}`
+             Nome do problema: `{EVENT.NAME}`
+             Host: `{HOST.NAME}`
+             Severidade: `{EVENT.SEVERITY}`
+             ID original do problema: `{EVENT.ID}`
+             URL do Trigger: `{TRIGGER.URL}`
+        
+        Atualizações de Problemas (Triggers)
+           Fonte do Evento: TRIGGERS
+           Modo de Operação: UPDATE
+           Assunto: "Updated problem: {EVENT.NAME}"
+           Mensagem:
+             `{USER.FULLNAME}` `{EVENT.UPDATE.ACTION}` o problema em `{EVENT.UPDATE.DATE}` `{EVENT.UPDATE.TIME}`.
+             Mensagem de atualização: `{EVENT.UPDATE.MESSAGE}`
+             Status atual do problema: `{EVENT.STATUS}`, reconhecimento: `{EVENT.ACK.STATUS}`.
+        
+        Descoberta de Dispositivos (Discovery)
+           Fonte do Evento: DISCOVERY
+           Modo de Operação: PROBLEM
+           Assunto: "Discovery: {DISCOVERY.DEVICE.STATUS} {DISCOVERY.DEVICE.IPADDRESS}"
+           Mensagem:
+             Regra de descoberta: `{DISCOVERY.RULE.NAME}`
+             IP do dispositivo: `{DISCOVERY.DEVICE.IPADDRESS}`
+             DNS do dispositivo: `{DISCOVERY.DEVICE.DNS}`
+             Status do dispositivo: `{DISCOVERY.DEVICE.STATUS}`
+             Tempo de atividade do dispositivo: `{DISCOVERY.DEVICE.UPTIME}`
+             Nome do serviço do dispositivo: `{DISCOVERY.SERVICE.NAME}`
+             Porta do serviço do dispositivo: `{DISCOVERY.SERVICE.PORT}`
+             Status do serviço do dispositivo: `{DISCOVERY.SERVICE.STATUS}`
+             Tempo de atividade do serviço do dispositivo: `{DISCOVERY.SERVICE.UPTIME}`
+        
+        Auto-registro de Hosts (Auto Registration)
+           Fonte do Evento: AUTOREGISTRATION
+           Modo de Operação: PROBLEM
+           Assunto: "Autoregistration: {HOST.HOST}"
+           Mensagem:
+             Nome do host: `{HOST.HOST}`
+             IP do host: `{HOST.IP}`
+             Porta do agente: `{HOST.PORT}`
+      message_templates:
+        - event_source: TRIGGERS
+          operation_mode: PROBLEM
+          subject: "*Problem:* {EVENT.NAME}"
+          message: |
+            *Problem started:* {EVENT.TIME} on {EVENT.DATE}
+            *Problem name:* {EVENT.NAME}
+            *Host:* {HOST.NAME}
+            *Severity:* {EVENT.SEVERITY}
+            *Operational data:* {EVENT.OPDATA}
+            *Original problem ID:* {EVENT.ID}
+            {TRIGGER.URL}
+        - event_source: TRIGGERS
+          operation_mode: RECOVERY
+          subject: "*Resolved:* {EVENT.DURATION}: {EVENT.NAME}"
+          message: |
+            *Problem resolved:* {EVENT.DURATION} at {EVENT.RECOVERY.TIME} on {EVENT.RECOVERY.DATE}
+            *Problem name:* {EVENT.NAME}
+            *Host:* {HOST.NAME}
+            *Severity:* {EVENT.SEVERITY}
+            *Original problem ID:* {EVENT.ID}
+            {TRIGGER.URL}
+        - event_source: TRIGGERS
+          operation_mode: UPDATE
+          subject: "*Updated problem:* {EVENT.NAME}"
+          message: |
+            {USER.FULLNAME} {EVENT.UPDATE.ACTION} problem at {EVENT.UPDATE.DATE} {EVENT.UPDATE.TIME}.
+            {EVENT.UPDATE.MESSAGE}
+
+            Current problem status is {EVENT.STATUS}, acknowledged: {EVENT.ACK.STATUS}.
+        - event_source: DISCOVERY
+          operation_mode: PROBLEM
+          subject: "*Discovery:* {DISCOVERY.DEVICE.STATUS} {DISCOVERY.DEVICE.IPADDRESS}"
+          message: |
+            *Discovery rule:* {DISCOVERY.RULE.NAME}
+
+            *Device IP:* {DISCOVERY.DEVICE.IPADDRESS}
+            *Device DNS:* {DISCOVERY.DEVICE.DNS}
+            *Device status:* {DISCOVERY.DEVICE.STATUS}
+            *Device uptime:* {DISCOVERY.DEVICE.UPTIME}
+
+            *Device service name:* {DISCOVERY.SERVICE.NAME}
+            *Device service port:* {DISCOVERY.SERVICE.PORT}
+            *Device service status:* {DISCOVERY.SERVICE.STATUS}
+            *Device service uptime:* {DISCOVERY.SERVICE.UPTIME}
+        - event_source: AUTOREGISTRATION
+          operation_mode: PROBLEM
+          subject: "Autoregistration: {HOST.HOST}"
+          message: |
+            *Host name:* {HOST.HOST}
+            *Host IP:* {HOST.IP}
+            *Agent port:* {HOST.PORT}

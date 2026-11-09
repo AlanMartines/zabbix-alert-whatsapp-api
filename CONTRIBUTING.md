@@ -22,7 +22,7 @@
 <h2>4. Validação</h2>
 <p>Antes de enviar seu pull request, rode a validação do repositório (requer <code>pip install pyyaml</code>; o Node.js, se instalado, também verifica a sintaxe dos webhooks):</p>
 <pre><code>python3 tools/validate.py</code></pre>
-<p>A mesma validação roda automaticamente no GitHub Actions. Ao alterar o JavaScript de um webhook, aplique a mesma mudança nas pastas <code>zbx_mediatypes/</code> e <code>zbx_mediatypes_use_emojis/</code>: a validação exige que sejam idênticos.</p>
+<p>A mesma validação roda automaticamente no GitHub Actions. Ao alterar o JavaScript de um webhook, aplique a mesma mudança nas pastas <code>zbx_mediatypes/</code> e <code>zbx_mediatypes_use_emojis/</code>: a validação exige que sejam idênticos. O mesmo vale para o bloco "Utilitários comuns" dos scripts Python em <code>alertscripts/</code> e <code>telegram/alertscripts/</code>.</p>
 
 <h2>5. Documentação</h2>
 <p>Se você estiver adicionando ou alterando funcionalidades, atualize a documentação de acordo.</p>

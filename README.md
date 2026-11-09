@@ -3,6 +3,10 @@
 Media types e scripts de alerta para enviar notificações do Zabbix para o WhatsApp,
 através de diferentes provedores de API.
 
+> **Telegram:** a pasta [`telegram/`](telegram/README.md) traz as mesmas três
+> variantes (sem emojis, com emojis e com gráfico) para um bot do Telegram, com os
+> mesmos templates.
+
 ## Provedores suportados
 
 | Provedor | Autenticação | Endpoint de texto | Envio para grupo |
@@ -24,6 +28,7 @@ zbx_mediatypes/                     Media types (webhook), mensagens sem emojis
 zbx_mediatypes_use_emojis/          Media types (webhook), mensagens com emojis
 zbx_mediatypes_use_emojis_graphic/  Media types (script), enviam o gráfico do item
 alertscripts/                       Scripts Python usados pelos media types do tipo SCRIPT
+telegram/                           As mesmas variantes para o Telegram (veja telegram/README.md)
 tools/validate.py                   Validação estrutural (roda também no GitHub Actions)
 ```
 
@@ -254,9 +259,10 @@ pip install pyyaml
 python3 tools/validate.py
 ```
 
-Confere se todos os media types abrem, se os `script_name` apontam para scripts
+Cobre também a pasta `telegram/`. Confere se todos os media types abrem, se os `script_name` apontam para scripts
 existentes e executáveis, se o número de argumentos bate, se os webhooks têm o
-mesmo JavaScript nas pastas com e sem emojis e se os templates não têm negrito
+mesmo JavaScript nas pastas com e sem emojis, se todos os scripts Python
+compartilham o mesmo bloco de utilitários e se os templates não têm negrito
 (`*`) sem fechar.
 
 # Testado com
